@@ -21,16 +21,22 @@
   button{background:#2b3550;color:#fff;border:1px solid #4a5a8a;padding:6px 12px;border-radius:5px;cursor:pointer;font-size:12px;margin:2px 4px 2px 0}
   button:hover{background:#3a4770}
   .variations{display:flex;flex-wrap:wrap;gap:8px;margin-top:30px}
-  .vcard{background:#1a1d29;border:1px solid #2c3142;border-radius:6px;padding:6px;cursor:pointer;text-align:center}
+  .vcard{background:#1a1d29;border:2px solid #2c3142;border-radius:6px;padding:6px;cursor:pointer;text-align:center;user-select:none}
   .vcard:hover{border-color:#5a7ad0}
+  .vcard.liked{border-color:#3ad07a}
+  .vcard.disliked{border-color:#d04a3a;opacity:0.45}
   .vcard canvas{background:#0e1018;border-radius:3px;display:block}
+  .vcard .mark{font-size:12px;height:14px;margin-top:2px}
   .hint{color:#778;font-size:11px;margin-top:2px}
+  .promptBox{margin-top:16px}
+  textarea.promptOut{width:100%;min-height:160px;background:#0e1018;color:#cde;border:1px solid #2c3142;border-radius:6px;padding:8px;font-family:ui-monospace,monospace;font-size:11px;box-sizing:border-box;margin-top:8px}
+  .copyStatus{font-size:11px;color:#7d7;margin-left:8px}
 </style>
 </head>
 <body>
 <header>
   <h1>Tile Game — Advanced Procedural Generation</h1>
-  <p class="sub">Top-down tree/rock props, reusing the shape ideas from the Platformer and Space Sim advanced packs. Configure directly, or generate a batch of variations and click one to load it.</p>
+  <p class="sub">Top-down tree/rock props, reusing the shape ideas from the Platformer and Space Sim advanced packs. Configure directly, or generate a batch of variations, mark liked/disliked, and generate a prompt to paste back into the conversation to refine the generator.</p>
 </header>
 
 <section>
@@ -43,8 +49,15 @@
     <div class="controls" id="treeControls"></div>
   </div>
   <div><button id="treeGenVariations">Generate 16 Variations</button></div>
-  <div class="hint">Click any thumbnail to load its parameters into the controls above.</div>
+  <div class="hint">Click a thumbnail = 👍 like. Shift+click = 👎 dislike. Double-click = load into controls above.</div>
   <div class="variations" id="treeVariations"></div>
+  <div class="promptBox">
+    <button id="treeGenPrompt">Generate Prompt from Selections</button>
+    <button id="treeDownloadCollage">⬇ Download Selected as Collage</button>
+    <button id="treeCopyPrompt">Copy Prompt</button>
+    <span class="copyStatus" id="treeCopyStatus"></span>
+    <textarea class="promptOut" id="treePromptOut" readonly placeholder="Select variations above, then click Generate Prompt. Copy the result and paste it back into the conversation to refine this generator."></textarea>
+  </div>
 </section>
 
 <section>
@@ -57,8 +70,15 @@
     <div class="controls" id="rockControls"></div>
   </div>
   <div><button id="rockGenVariations">Generate 16 Variations</button></div>
-  <div class="hint">Click any thumbnail to load its parameters into the controls above.</div>
+  <div class="hint">Click a thumbnail = 👍 like. Shift+click = 👎 dislike. Double-click = load into controls above.</div>
   <div class="variations" id="rockVariations"></div>
+  <div class="promptBox">
+    <button id="rockGenPrompt">Generate Prompt from Selections</button>
+    <button id="rockDownloadCollage">⬇ Download Selected as Collage</button>
+    <button id="rockCopyPrompt">Copy Prompt</button>
+    <span class="copyStatus" id="rockCopyStatus"></span>
+    <textarea class="promptOut" id="rockPromptOut" readonly placeholder="Select variations above, then click Generate Prompt. Copy the result and paste it back into the conversation to refine this generator."></textarea>
+  </div>
 </section>
 
 <script>
@@ -68,11 +88,62 @@ function rint(rng,a,b){return a+Math.floor(rng()*(b-a+1));}
 function rrange(rng,a,b){return a+rng()*(b-a);}
 function pick(rng,arr){ return arr[Math.floor(rng()*arr.length)]; }
 
+// ---------- prompt generation from liked/disliked selections ----------
+function fieldSummary(field, arr){
+  if(arr.length===0) return 'n/a';
+  if(field.type==='range'){
+    const vals = arr.map(p=>p[field.key]);
+    const avg = vals.reduce((a,b)=>a+b,0)/vals.length;
+    const min = Math.min(...vals), max = Math.max(...vals);
+    return `avg ${avg.toFixed(2)} (range ${min.toFixed(2)}–${max.toFixed(2)})`;
+  }
+  const counts = {};
+  arr.forEach(p=>{ counts[p[field.key]] = (counts[p[field.key]]||0)+1; });
+  return Object.entries(counts).sort((a,b)=>b[1]-a[1]).map(([k,c])=>`${k} (${c}/${arr.length})`).join(', ');
+}
+function buildVariationPrompt(assetName, fileName, schema, liked, disliked){
+  const lines = [];
+  lines.push(`I'm iterating on the procedural "${assetName}" generator in ${fileName}.`);
+  lines.push(`From a batch of random variations, here is my feedback:`);
+  lines.push('');
+  lines.push(`LIKED (n=${liked.length}):`);
+  liked.forEach((p,i)=> lines.push(`  ${i+1}. ${JSON.stringify(p)}`));
+  lines.push('');
+  lines.push(`DISLIKED (n=${disliked.length}):`);
+  disliked.forEach((p,i)=> lines.push(`  ${i+1}. ${JSON.stringify(p)}`));
+  lines.push('');
+  lines.push(`Parameter comparison (liked vs disliked):`);
+  schema.forEach(field=>{
+    lines.push(`  - ${field.key}: liked=${fieldSummary(field,liked)} | disliked=${fieldSummary(field,disliked)}`);
+  });
+  lines.push('');
+  lines.push(`Please adjust the default parameters and/or the randomizeParams() ranges for this asset in ${fileName} to bias future generation toward what I liked, and briefly explain what you changed and why.`);
+  return lines.join('\n');
+}
+function buildCollageCanvas(name, likedCards, dislikedCards, thumbSize){
+  const cols = Math.max(likedCards.length, dislikedCards.length, 1);
+  const pad=10, labelH=20;
+  const w = pad + cols*(thumbSize+pad);
+  const h = pad*2 + labelH*2 + thumbSize*2;
+  const canvas = document.createElement('canvas'); canvas.width=w; canvas.height=h;
+  const ctx = canvas.getContext('2d');
+  ctx.fillStyle='#12141c'; ctx.fillRect(0,0,w,h);
+  ctx.font='bold 13px sans-serif';
+  ctx.fillStyle='#3ad07a'; ctx.fillText(`LIKED — ${name}`, pad, pad+13);
+  likedCards.forEach((c,i)=> ctx.drawImage(c.canvas, pad+i*(thumbSize+pad), pad+labelH));
+  const y2 = pad*2+labelH+thumbSize;
+  ctx.fillStyle='#d04a3a'; ctx.fillText(`DISLIKED — ${name}`, pad, y2+13);
+  dislikedCards.forEach((c,i)=> ctx.drawImage(c.canvas, pad+i*(thumbSize+pad), y2+labelH));
+  return canvas;
+}
+
 // ---------- generic configurable-asset harness ----------
 function buildConfigurable(opts){
-  const { schema, defaultParams, drawFn, previewCanvas, controlsEl, downloadBtn, genBtn, variationsEl, thumbSize, randomizeParams, name } = opts;
+  const { schema, defaultParams, drawFn, previewCanvas, controlsEl, downloadBtn, genBtn, variationsEl, thumbSize, randomizeParams, name,
+          promptGenBtn, promptCopyBtn, promptOut, collageBtn, fileName } = opts;
   let params = Object.assign({}, defaultParams);
   let seed = Math.floor(Math.random()*1e9);
+  let currentVariations = [];
 
   function renderPreview(){
     const ctx = previewCanvas.getContext('2d');
@@ -128,6 +199,7 @@ function buildConfigurable(opts){
 
   genBtn.onclick = ()=>{
     variationsEl.innerHTML = '';
+    currentVariations = [];
     for(let i=0;i<16;i++){
       const vSeed = Math.floor(Math.random()*1e9);
       const vRng = mulberry32(vSeed+1);
@@ -136,11 +208,55 @@ function buildConfigurable(opts){
       const canvas = document.createElement('canvas'); canvas.width=thumbSize; canvas.height=thumbSize;
       const ctx = canvas.getContext('2d');
       drawFn(ctx, mulberry32(vSeed), thumbSize, thumbSize, vParams);
-      card.appendChild(canvas);
-      card.onclick = ()=> loadParams(vParams, vSeed);
+      const mark = document.createElement('div'); mark.className='mark';
+      card.appendChild(canvas); card.appendChild(mark);
+
+      const entry = { params: vParams, seed: vSeed, canvas, card, liked:false, disliked:false };
+      currentVariations.push(entry);
+
+      card.onclick = (e)=>{
+        if(e.shiftKey){
+          entry.disliked = !entry.disliked; if(entry.disliked) entry.liked=false;
+        } else {
+          entry.liked = !entry.liked; if(entry.liked) entry.disliked=false;
+        }
+        card.classList.toggle('liked', entry.liked);
+        card.classList.toggle('disliked', entry.disliked);
+        mark.textContent = entry.liked ? '👍' : entry.disliked ? '👎' : '';
+      };
+      card.ondblclick = ()=> loadParams(vParams, vSeed);
       variationsEl.appendChild(card);
     }
   };
+
+  if(promptGenBtn){
+    promptGenBtn.onclick = ()=>{
+      const liked = currentVariations.filter(v=>v.liked).map(v=>v.params);
+      const disliked = currentVariations.filter(v=>v.disliked).map(v=>v.params);
+      promptOut.value = buildVariationPrompt(name, fileName, schema, liked, disliked);
+    };
+  }
+  if(promptCopyBtn){
+    promptCopyBtn.onclick = ()=>{
+      if(!promptOut.value){ return; }
+      navigator.clipboard.writeText(promptOut.value).then(()=>{
+        const status = promptCopyBtn.parentElement.querySelector('.copyStatus');
+        if(status){ status.textContent='Copied!'; setTimeout(()=>status.textContent='',1500); }
+      });
+    };
+  }
+  if(collageBtn){
+    collageBtn.onclick = ()=>{
+      const likedCards = currentVariations.filter(v=>v.liked);
+      const dislikedCards = currentVariations.filter(v=>v.disliked);
+      if(likedCards.length===0 && dislikedCards.length===0) return;
+      const collage = buildCollageCanvas(name, likedCards, dislikedCards, thumbSize);
+      const a = document.createElement('a');
+      a.href = collage.toDataURL('image/png');
+      a.download = name.toLowerCase().replace(/\s+/g,'_')+'_selections.png';
+      a.click();
+    };
+  }
 
   buildControls();
   renderPreview();
@@ -231,7 +347,12 @@ buildConfigurable({
     branches: rint(rng,0,8),
     lean: rrange(rng,-3.14,3.14),
     hue: rint(rng,70,160),
-  })
+  }),
+  promptGenBtn:document.getElementById('treeGenPrompt'),
+  promptCopyBtn:document.getElementById('treeCopyPrompt'),
+  promptOut:document.getElementById('treePromptOut'),
+  collageBtn:document.getElementById('treeDownloadCollage'),
+  fileName:'advanced/tile_game_advanced.html',
 });
 
 // ============================================================
@@ -299,7 +420,12 @@ buildConfigurable({
     hue: rint(rng,0,360),
     hueSat: rint(rng,0,30),
     light: rint(rng,30,70),
-  })
+  }),
+  promptGenBtn:document.getElementById('rockGenPrompt'),
+  promptCopyBtn:document.getElementById('rockCopyPrompt'),
+  promptOut:document.getElementById('rockPromptOut'),
+  collageBtn:document.getElementById('rockDownloadCollage'),
+  fileName:'advanced/tile_game_advanced.html',
 });
 </script>
 </body>
