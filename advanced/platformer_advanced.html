@@ -107,6 +107,15 @@
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
 function rint(rng,a,b){return a+Math.floor(rng()*(b-a+1));}
 function rrange(rng,a,b){return a+rng()*(b-a);}
+// Box-Muller transform: standard-normal sample (mean 0, stddev 1) from
+// the uniform seeded rng, so Gaussian-distributed placement stays
+// reproducible from the same seed like everything else here.
+function gaussianRand(rng){
+  let u=0, v=0;
+  while(u===0) u=rng();
+  while(v===0) v=rng();
+  return Math.sqrt(-2*Math.log(u))*Math.cos(2*Math.PI*v);
+}
 function rockRadii(rng, edges, irregularity){
   // Raw jittered radius per vertex, then smoothed to avoid two failure modes:
   // sharp exterior spikes (a vertex jutting out much further than its
@@ -481,27 +490,25 @@ function drawTrunkWithBigBranches(ctx, rng, w, h, p){
     ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(tipX,tipY); ctx.stroke();
   }
 
-  // Foliage clump anchors: distributed around the canopy's circular
-  // envelope (upper ~190deg arc, radius 0.55x-1.0x canopyR, jittered)
-  // instead of along the narrow branch corridor. This is what actually
-  // produces a round aggregate silhouette - clumps stacked along a near-
-  // vertical branch cone (the old approach) stay narrow and tall no
-  // matter how their individual size is tuned, since their anchor
-  // *positions* were never spread across the canopy's width. Count
-  // reuses the Branches parameter so it stays a single "how full/dense"
-  // knob for the user, and clump radius scales with the new Foliage
-  // Clump Size Factor so bigger factor = more overlap = fuller/rounder.
+  // Foliage clump anchors: x/y offsets from canopy center drawn from a
+  // 2D Gaussian (denser near the middle, tapering naturally toward the
+  // edge - this reads as round without needing an explicit ring/arc
+  // shape), and each clump's radius also drawn from a Gaussian around a
+  // mean set by Foliage Clump Size Factor. Unbounded Gaussian tails could
+  // occasionally place a clump well outside the canopy or give it a
+  // near-zero/negative radius, so both are soft-clamped afterward.
   const clumps = [];
+  const posSigma = canopyR*0.42;
+  const maxDist = canopyR*1.0;
+  const radiusMean = canopyR*(0.14 + p.foliageSizeFactor*0.32);
+  const radiusSigma = radiusMean*0.35;
   for(let i=0;i<p.branches;i++){
-    const spread = p.branches>1 ? (i/(p.branches-1)) : 0.5;
-    const ringAngleDeg = -95 + spread*190 + (rng()-0.5)*18;
-    const ringAngleRad = ringAngleDeg*Math.PI/180;
-    const radiusFrac = 0.55 + rng()*0.45;
-    const cx = canopyCx + Math.sin(ringAngleRad)*canopyR*radiusFrac;
-    const cy = canopyCy - Math.cos(ringAngleRad)*canopyR*radiusFrac;
-    const baseR = canopyR*(0.12 + p.foliageSizeFactor*0.35);
-    const r = baseR*(0.85+rng()*0.3);
-    clumps.push({x:cx, y:cy, r});
+    let dx = gaussianRand(rng)*posSigma;
+    let dy = gaussianRand(rng)*posSigma;
+    const dist = Math.hypot(dx,dy);
+    if(dist>maxDist){ const s=maxDist/dist; dx*=s; dy*=s; }
+    const r = Math.min(canopyR*0.55, Math.max(canopyR*0.08, radiusMean + gaussianRand(rng)*radiusSigma));
+    clumps.push({x:canopyCx+dx, y:canopyCy+dy, r});
   }
 
   return { trunkH, trunkTopY, trunkTopX, canopyW, canopyR, canopyCx, canopyCy, clumps };
