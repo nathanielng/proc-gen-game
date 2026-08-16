@@ -673,7 +673,16 @@ buildConfigurable({
   // essentially no signal, left untouched. Slider min/max bounds are
   // unchanged since those were explicit prior requests; only the
   // defaults and the random-sampling sub-ranges shifted.
-  defaultParams:{height:1.45,widthRatio:1.2,canopyStart:0.14,tierHeightFrac:0.14,overlap:0.3,apexAngleTop:90,branches:5,lean:0,hue:95},
+  // Round 2 of feedback bias: this batch's height signal directly
+  // contradicted round 1 (liked avg was 1.46 then; here liked avg is
+  // 1.21 vs disliked avg 1.43) - the "taller is better" bias from last
+  // round was wrong, walked back to re-center on this newer, more
+  // moderate range. widthRatio showed a real signal this time (liked
+  // avg 1.12 vs disliked avg 1.24, narrower preferred) that wasn't
+  // present in round 1's data. canopyStart, tierHeightFrac, overlap,
+  // apexAngleTop, branches, and hue all showed heavy liked/disliked
+  // range overlap again - no signal, left at round 1's settings.
+  defaultParams:{height:1.2,widthRatio:1.1,canopyStart:0.14,tierHeightFrac:0.14,overlap:0.3,apexAngleTop:90,branches:5,lean:0,hue:95},
   drawFn:drawTreeConicalAdvanced,
   previewCanvas:document.getElementById('treeConicalPreview'),
   controlsEl:document.getElementById('treeConicalControls'),
@@ -682,8 +691,8 @@ buildConfigurable({
   variationsEl:document.getElementById('treeConicalVariations'),
   thumbSize:90,
   randomizeParams:(rng)=>({
-    height: rrange(rng,1.1,1.6),
-    widthRatio: rrange(rng,1.0,1.4),
+    height: rrange(rng,1.0,1.3),
+    widthRatio: rrange(rng,1.0,1.2),
     canopyStart: rrange(rng,0.1,0.18),
     tierHeightFrac: rrange(rng,0.12,0.17),
     overlap: rrange(rng,0.28,0.32),
