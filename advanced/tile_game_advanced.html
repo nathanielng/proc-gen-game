@@ -24,7 +24,7 @@
   .vcard{background:#1a1d29;border:2px solid #2c3142;border-radius:6px;padding:6px;cursor:pointer;text-align:center;user-select:none}
   .vcard:hover{border-color:#5a7ad0}
   .vcard.liked{border-color:#3ad07a}
-  .vcard.disliked{border-color:#d04a3a;opacity:0.45}
+  .vcard.disliked{border-color:#ff4d1a}
   .vcard canvas{background:#0e1018;border-radius:3px;display:block}
   .vcard .mark{font-size:12px;height:14px;margin-top:2px}
   .hint{color:#778;font-size:11px;margin-top:2px}
@@ -86,6 +86,38 @@
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
 function rint(rng,a,b){return a+Math.floor(rng()*(b-a+1));}
 function rrange(rng,a,b){return a+rng()*(b-a);}
+function rockRadii(rng, edges, irregularity){
+  // Raw jittered radius per vertex, then smoothed to avoid two failure modes:
+  // sharp exterior spikes (a vertex jutting out much further than its
+  // neighbors reads as a acute point) and more than one interior
+  // indentation (a vertex pulled in much further than neighbors reads as
+  // a concave notch). At most one indentation is kept; extra ones and all
+  // spikes are relaxed toward the local neighbor average.
+  const radii = [];
+  for(let i=0;i<edges;i++) radii.push(1 + (rng()-0.5)*irregularity);
+  for(let pass=0; pass<2; pass++){
+    for(let i=0;i<edges;i++){
+      const prev = radii[(i-1+edges)%edges], next = radii[(i+1)%edges];
+      const avg = (prev+next)/2;
+      if(radii[i] > avg*1.12) radii[i] = avg*1.12;
+    }
+  }
+  const dips = [];
+  for(let i=0;i<edges;i++){
+    const prev = radii[(i-1+edges)%edges], next = radii[(i+1)%edges];
+    const avg = (prev+next)/2;
+    if(radii[i] < avg*0.85) dips.push(i);
+  }
+  if(dips.length > 1){
+    dips.sort((a,b)=> radii[a]-radii[b]);
+    for(let k=1;k<dips.length;k++){
+      const i = dips[k];
+      const prev = radii[(i-1+edges)%edges], next = radii[(i+1)%edges];
+      radii[i] = (prev+next)/2*0.93;
+    }
+  }
+  return radii;
+}
 function pick(rng,arr){ return arr[Math.floor(rng()*arr.length)]; }
 
 // ---------- prompt generation from liked/disliked selections ----------
@@ -120,20 +152,26 @@ function buildVariationPrompt(assetName, fileName, schema, liked, disliked){
   lines.push(`Please adjust the default parameters and/or the randomizeParams() ranges for this asset in ${fileName} to bias future generation toward what I liked, and briefly explain what you changed and why.`);
   return lines.join('\n');
 }
-function buildCollageCanvas(name, likedCards, dislikedCards, thumbSize){
-  const cols = Math.max(likedCards.length, dislikedCards.length, 1);
+function buildCollageCanvas(name, likedCards, neutralCards, dislikedCards, thumbSize){
+  const rows = [
+    {label:`LIKED — ${name}`, color:'#3ad07a', cards:likedCards},
+    {label:`NEUTRAL — ${name}`, color:'#8892a6', cards:neutralCards},
+    {label:`DISLIKED — ${name}`, color:'#ff4d1a', cards:dislikedCards},
+  ].filter(r=>r.cards.length>0);
+  const cols = Math.max(1, ...rows.map(r=>r.cards.length));
   const pad=10, labelH=20;
   const w = pad + cols*(thumbSize+pad);
-  const h = pad*2 + labelH*2 + thumbSize*2;
+  const h = pad + rows.length*(labelH+thumbSize+pad);
   const canvas = document.createElement('canvas'); canvas.width=w; canvas.height=h;
   const ctx = canvas.getContext('2d');
   ctx.fillStyle='#12141c'; ctx.fillRect(0,0,w,h);
   ctx.font='bold 13px sans-serif';
-  ctx.fillStyle='#3ad07a'; ctx.fillText(`LIKED — ${name}`, pad, pad+13);
-  likedCards.forEach((c,i)=> ctx.drawImage(c.canvas, pad+i*(thumbSize+pad), pad+labelH));
-  const y2 = pad*2+labelH+thumbSize;
-  ctx.fillStyle='#d04a3a'; ctx.fillText(`DISLIKED — ${name}`, pad, y2+13);
-  dislikedCards.forEach((c,i)=> ctx.drawImage(c.canvas, pad+i*(thumbSize+pad), y2+labelH));
+  let y = pad;
+  rows.forEach(row=>{
+    ctx.fillStyle = row.color; ctx.fillText(row.label, pad, y+13);
+    row.cards.forEach((c,i)=> ctx.drawImage(c.canvas, pad+i*(thumbSize+pad), y+labelH));
+    y += labelH+thumbSize+pad;
+  });
   return canvas;
 }
 
@@ -249,8 +287,9 @@ function buildConfigurable(opts){
     collageBtn.onclick = ()=>{
       const likedCards = currentVariations.filter(v=>v.liked);
       const dislikedCards = currentVariations.filter(v=>v.disliked);
-      if(likedCards.length===0 && dislikedCards.length===0) return;
-      const collage = buildCollageCanvas(name, likedCards, dislikedCards, thumbSize);
+      const neutralCards = currentVariations.filter(v=>!v.liked && !v.disliked);
+      if(currentVariations.length===0) return;
+      const collage = buildCollageCanvas(name, likedCards, neutralCards, dislikedCards, thumbSize);
       const a = document.createElement('a');
       a.href = collage.toDataURL('image/png');
       a.download = name.toLowerCase().replace(/\s+/g,'_')+'_selections.png';
@@ -365,11 +404,11 @@ function drawRockTopDownAdvanced(ctx, rng, w, h, p){
   ctx.fillStyle='rgba(0,0,0,0.12)';
   ctx.beginPath(); ctx.ellipse(cx+3,cy+4,baseR*p.elongation,baseR/p.elongation*0.9,0,0,Math.PI*2); ctx.fill();
 
+  const radii = rockRadii(rng, p.edges, p.irregularity);
   const verts=[];
   for(let i=0;i<p.edges;i++){
     const a=(i/p.edges)*Math.PI*2;
-    const jitter = 1+(rng()-0.5)*p.irregularity;
-    const r = baseR*jitter;
+    const r = baseR*radii[i];
     verts.push([cx+Math.cos(a)*r*p.elongation, cy+Math.sin(a)*r/p.elongation]);
   }
   ctx.fillStyle=`hsl(${p.hue},${p.hueSat}%,${p.light}%)`;
