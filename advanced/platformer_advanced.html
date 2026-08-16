@@ -1,0 +1,339 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Platformer — Advanced Procedural Generation</title>
+<style>
+  body{margin:0;background:#12141c;color:#eee;font-family:sans-serif}
+  header{position:sticky;top:0;background:#1a1d29;padding:14px 20px;border-bottom:1px solid #333;z-index:5}
+  h1{font-size:18px;margin:0}
+  p.sub{color:#9ab;font-size:12px;margin:4px 0 0}
+  section{padding:20px}
+  h2{font-size:15px;color:#9ab;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px}
+  .panel{display:flex;gap:24px;flex-wrap:wrap;margin-bottom:16px}
+  .previewBox{background:#1a1d29;border:1px solid #2c3142;border-radius:8px;padding:14px;text-align:center}
+  .previewBox canvas{background:#0e1018;border-radius:4px}
+  .controls{background:#1a1d29;border:1px solid #2c3142;border-radius:8px;padding:14px;min-width:280px;flex:1}
+  .ctrl{margin-bottom:12px}
+  .ctrl label{display:flex;justify-content:space-between;font-size:12px;color:#ccd;margin-bottom:4px}
+  .ctrl input[type=range]{width:100%}
+  .ctrl select{width:100%;background:#0e1018;color:#eee;border:1px solid #2c3142;padding:4px;border-radius:4px}
+  button{background:#2b3550;color:#fff;border:1px solid #4a5a8a;padding:6px 12px;border-radius:5px;cursor:pointer;font-size:12px;margin:2px 4px 2px 0}
+  button:hover{background:#3a4770}
+  .variations{display:flex;flex-wrap:wrap;gap:8px;margin-top:30px}
+  .vcard{background:#1a1d29;border:1px solid #2c3142;border-radius:6px;padding:6px;cursor:pointer;text-align:center}
+  .vcard:hover{border-color:#5a7ad0}
+  .vcard canvas{background:#0e1018;border-radius:3px;display:block}
+  .hint{color:#778;font-size:11px;margin-top:2px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Platformer — Advanced Procedural Generation</h1>
+  <p class="sub">Configure macro-shape parameters directly, or generate a batch of variations and click one to load it into the controls.</p>
+</header>
+
+<section>
+  <h2>Rock</h2>
+  <div class="panel">
+    <div class="previewBox">
+      <canvas id="rockPreview" width="220" height="220"></canvas>
+      <div><button id="rockDownload">⬇ Download PNG</button></div>
+    </div>
+    <div class="controls" id="rockControls"></div>
+  </div>
+  <div><button id="rockGenVariations">Generate 16 Variations</button></div>
+  <div class="hint">Click any thumbnail to load its parameters into the controls above.</div>
+  <div class="variations" id="rockVariations"></div>
+</section>
+
+<section>
+  <h2>Tree</h2>
+  <div class="panel">
+    <div class="previewBox">
+      <canvas id="treePreview" width="220" height="260"></canvas>
+      <div><button id="treeDownload">⬇ Download PNG</button></div>
+    </div>
+    <div class="controls" id="treeControls"></div>
+  </div>
+  <div><button id="treeGenVariations">Generate 16 Variations</button></div>
+  <div class="hint">Click any thumbnail to load its parameters into the controls above.</div>
+  <div class="variations" id="treeVariations"></div>
+</section>
+
+<script>
+// ---------- RNG ----------
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+function rint(rng,a,b){return a+Math.floor(rng()*(b-a+1));}
+function rrange(rng,a,b){return a+rng()*(b-a);}
+
+// ---------- generic configurable-asset harness ----------
+// schema entries: {key,label,type:'range'|'select', min,max,step, options:[{value,label}]}
+function buildConfigurable(opts){
+  const { schema, defaultParams, drawFn, previewCanvas, controlsEl, downloadBtn, genBtn, variationsEl, thumbSize, randomizeParams, name } = opts;
+  let params = Object.assign({}, defaultParams);
+  let seed = Math.floor(Math.random()*1e9);
+
+  function renderPreview(){
+    const ctx = previewCanvas.getContext('2d');
+    ctx.clearRect(0,0,previewCanvas.width,previewCanvas.height);
+    drawFn(ctx, mulberry32(seed), previewCanvas.width, previewCanvas.height, params);
+  }
+
+  function buildControls(){
+    controlsEl.innerHTML = '';
+    schema.forEach(field=>{
+      const wrap = document.createElement('div'); wrap.className='ctrl';
+      const label = document.createElement('label');
+      const valSpan = document.createElement('span');
+      label.textContent = field.label + ' ';
+      label.appendChild(valSpan);
+      wrap.appendChild(label);
+      if(field.type==='range'){
+        const input = document.createElement('input');
+        input.type='range'; input.min=field.min; input.max=field.max; input.step=field.step||1;
+        input.value = params[field.key];
+        valSpan.textContent = params[field.key];
+        input.oninput = ()=>{ params[field.key]=Number(input.value); valSpan.textContent=input.value; renderPreview(); };
+        wrap.appendChild(input);
+      } else if(field.type==='select'){
+        const sel = document.createElement('select');
+        field.options.forEach(o=>{
+          const opt = document.createElement('option'); opt.value=o.value; opt.textContent=o.label;
+          if(o.value===params[field.key]) opt.selected=true;
+          sel.appendChild(opt);
+        });
+        sel.onchange = ()=>{ params[field.key]=sel.value; renderPreview(); };
+        wrap.appendChild(sel);
+      }
+      controlsEl.appendChild(wrap);
+    });
+    const reseedBtn = document.createElement('button');
+    reseedBtn.textContent = '↻ New Seed (keep params)';
+    reseedBtn.onclick = ()=>{ seed = Math.floor(Math.random()*1e9); renderPreview(); };
+    controlsEl.appendChild(reseedBtn);
+  }
+
+  function loadParams(p, s){
+    params = Object.assign({}, p); seed = s;
+    buildControls(); renderPreview();
+  }
+
+  downloadBtn.onclick = ()=>{
+    const a = document.createElement('a');
+    a.href = previewCanvas.toDataURL('image/png');
+    a.download = name.toLowerCase().replace(/\s+/g,'_')+'.png';
+    a.click();
+  };
+
+  genBtn.onclick = ()=>{
+    variationsEl.innerHTML = '';
+    for(let i=0;i<16;i++){
+      const vSeed = Math.floor(Math.random()*1e9);
+      const vRng = mulberry32(vSeed+1);
+      const vParams = randomizeParams(vRng);
+      const card = document.createElement('div'); card.className='vcard';
+      const canvas = document.createElement('canvas'); canvas.width=thumbSize; canvas.height=thumbSize;
+      const ctx = canvas.getContext('2d');
+      drawFn(ctx, mulberry32(vSeed), thumbSize, thumbSize, vParams);
+      card.appendChild(canvas);
+      card.onclick = ()=> loadParams(vParams, vSeed);
+      variationsEl.appendChild(card);
+    }
+  };
+
+  buildControls();
+  renderPreview();
+  return { loadParams };
+}
+
+// ============================================================
+// ROCK — configurable polygon edge count, irregularity, elongation, tint
+// ============================================================
+function drawRockAdvanced(ctx, rng, w, h, p){
+  const cx=w*0.5, cy=h*0.55, baseR=Math.min(w,h)*0.32;
+  ctx.save(); ctx.translate(cx,cy); ctx.scale(p.elongation, 1/p.elongation);
+  // ground shadow
+  ctx.restore();
+  ctx.fillStyle='rgba(0,0,0,0.15)';
+  ctx.beginPath(); ctx.ellipse(cx, cy+baseR*0.75, baseR*p.elongation*0.9, baseR*0.18, 0, 0, Math.PI*2); ctx.fill();
+
+  const verts=[];
+  for(let i=0;i<p.edges;i++){
+    const a = (i/p.edges)*Math.PI*2;
+    const jitter = 1 + (rng()-0.5)*p.irregularity;
+    const r = baseR*jitter;
+    verts.push([cx+Math.cos(a)*r*p.elongation, cy+Math.sin(a)*r/p.elongation]);
+  }
+  ctx.fillStyle = `hsl(${p.hue},${p.hueSat}%,${p.light}%)`;
+  ctx.beginPath();
+  verts.forEach((v,i)=> i===0?ctx.moveTo(v[0],v[1]):ctx.lineTo(v[0],v[1]));
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=1.5; ctx.stroke();
+
+  // faceted shading using adjacent vertex triangles
+  for(let i=0;i<verts.length;i++){
+    const v0=verts[i], v1=verts[(i+1)%verts.length];
+    const midAngle = Math.atan2((v0[1]+v1[1])/2-cy, (v0[0]+v1[0])/2-cx);
+    const lightness = 0.5+0.5*Math.cos(midAngle-(-2.4)); // light from upper-left
+    ctx.fillStyle = `rgba(255,255,255,${Math.max(0,lightness-0.5)*0.35})`;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(v0[0],v0[1]); ctx.lineTo(v1[0],v1[1]); ctx.closePath(); ctx.fill();
+    ctx.fillStyle = `rgba(0,0,0,${Math.max(0,0.5-lightness)*0.35})`;
+    ctx.beginPath(); ctx.moveTo(cx,cy); ctx.lineTo(v0[0],v0[1]); ctx.lineTo(v1[0],v1[1]); ctx.closePath(); ctx.fill();
+  }
+
+  // moss / speckle detail
+  if(p.moss>0){
+    ctx.fillStyle='rgba(90,150,80,0.3)';
+    for(let i=0;i<p.moss;i++) ctx.beginPath(), ctx.arc(cx+(rng()-0.5)*baseR*p.elongation, cy+(rng()-0.5)*baseR/p.elongation, baseR*0.08, 0, Math.PI*2), ctx.fill();
+  }
+}
+buildConfigurable({
+  name: 'Rock',
+  schema:[
+    {key:'edges',label:'Polygon Edges',type:'range',min:4,max:14,step:1},
+    {key:'irregularity',label:'Irregularity',type:'range',min:0,max:1,step:0.05},
+    {key:'elongation',label:'Elongation (w/h)',type:'range',min:0.6,max:1.8,step:0.05},
+    {key:'hue',label:'Hue',type:'range',min:0,max:360,step:5},
+    {key:'hueSat',label:'Saturation %',type:'range',min:0,max:40,step:2},
+    {key:'light',label:'Lightness %',type:'range',min:20,max:70,step:2},
+    {key:'moss',label:'Moss Patches',type:'range',min:0,max:6,step:1},
+  ],
+  defaultParams:{edges:7,irregularity:0.4,elongation:1,hue:210,hueSat:10,light:45,moss:2},
+  drawFn:drawRockAdvanced,
+  previewCanvas:document.getElementById('rockPreview'),
+  controlsEl:document.getElementById('rockControls'),
+  downloadBtn:document.getElementById('rockDownload'),
+  genBtn:document.getElementById('rockGenVariations'),
+  variationsEl:document.getElementById('rockVariations'),
+  thumbSize:80,
+  randomizeParams:(rng)=>({
+    edges: rint(rng,4,14),
+    irregularity: rrange(rng,0,1),
+    elongation: rrange(rng,0.6,1.8),
+    hue: rint(rng,0,360),
+    hueSat: rint(rng,0,40),
+    light: rint(rng,20,70),
+    moss: rint(rng,0,6),
+  })
+});
+
+// ============================================================
+// TREE — configurable height, width ratio, canopy shape, branch count
+// ============================================================
+function drawTreeAdvanced(ctx, rng, w, h, p){
+  const baseX = w*0.5, groundY = h*0.92;
+  const trunkH = h*0.5*p.height;
+  const trunkTopY = groundY - trunkH;
+  const trunkW = w*0.06;
+
+  ctx.fillStyle='rgba(0,0,0,0.15)';
+  ctx.beginPath(); ctx.ellipse(baseX, groundY, w*0.22, h*0.03, 0, 0, Math.PI*2); ctx.fill();
+
+  // trunk with lean
+  const leanX = trunkTopY + (baseX + p.lean*w*0.15 - baseX);
+  ctx.strokeStyle='#4a301a'; ctx.lineWidth=trunkW; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(baseX, groundY); ctx.quadraticCurveTo(baseX+p.lean*w*0.08, (groundY+trunkTopY)/2, baseX+p.lean*w*0.15, trunkTopY); ctx.stroke();
+  const trunkTopX = baseX + p.lean*w*0.15;
+
+  // branch stubs
+  ctx.strokeStyle='#3a2412'; ctx.lineWidth=trunkW*0.4;
+  for(let i=0;i<p.branches;i++){
+    const t = 0.3+ (i/(p.branches+1))*0.6;
+    const by = groundY - trunkH*t;
+    const bx = baseX + (trunkTopX-baseX)*t;
+    const dir = i%2===0?1:-1;
+    const len = w*0.1*(1-t*0.3);
+    ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(bx+dir*len, by-len*0.5); ctx.stroke();
+  }
+
+  const canopyW = w*0.4*p.widthRatio;
+  const canopyH = trunkH*0.9;
+  const canopyCx = trunkTopX, canopyCy = trunkTopY - canopyH*0.15;
+  const hue = p.hue;
+
+  function foliageFill(l){ return `hsl(${hue},45%,${l}%)`; }
+
+  if(p.shape==='round'){
+    ctx.fillStyle = foliageFill(30);
+    ctx.beginPath(); ctx.arc(canopyCx, canopyCy, canopyW*0.5, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle = foliageFill(38);
+    ctx.beginPath(); ctx.arc(canopyCx-canopyW*0.18, canopyCy-canopyH*0.1, canopyW*0.3, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(canopyCx+canopyW*0.18, canopyCy-canopyH*0.1, canopyW*0.3, 0, Math.PI*2); ctx.fill();
+    ctx.fillStyle='rgba(255,255,255,0.15)';
+    ctx.beginPath(); ctx.arc(canopyCx-canopyW*0.12, canopyCy-canopyH*0.25, canopyW*0.18, 0, Math.PI*2); ctx.fill();
+  } else if(p.shape==='conical'){
+    const layers = 4;
+    for(let i=0;i<layers;i++){
+      const t = i/(layers-1);
+      const ly = canopyCy - canopyH*0.5 + canopyH*t;
+      const lw = canopyW*0.55*(1-t*0.75);
+      ctx.fillStyle = foliageFill(28+i*4);
+      ctx.beginPath();
+      ctx.moveTo(canopyCx, ly-canopyH*0.22);
+      ctx.lineTo(canopyCx+lw, ly+canopyH*0.12);
+      ctx.lineTo(canopyCx-lw, ly+canopyH*0.12);
+      ctx.closePath(); ctx.fill();
+    }
+  } else if(p.shape==='layered'){
+    const layers = 3;
+    for(let i=0;i<layers;i++){
+      const t = i/(layers-1);
+      const ly = canopyCy - canopyH*0.35 + canopyH*0.5*t;
+      const lw = canopyW*0.5*(1-t*0.3);
+      ctx.fillStyle = foliageFill(28+i*5);
+      ctx.beginPath(); ctx.ellipse(canopyCx, ly, lw, canopyH*0.16, 0, 0, Math.PI*2); ctx.fill();
+    }
+  } else if(p.shape==='windswept'){
+    ctx.fillStyle = foliageFill(32);
+    ctx.beginPath();
+    ctx.ellipse(canopyCx+canopyW*0.15, canopyCy, canopyW*0.55, canopyH*0.3, -0.3, 0, Math.PI*2);
+    ctx.fill();
+    ctx.fillStyle = foliageFill(38);
+    ctx.beginPath();
+    ctx.ellipse(canopyCx+canopyW*0.3, canopyCy-canopyH*0.08, canopyW*0.3, canopyH*0.16, -0.3, 0, Math.PI*2);
+    ctx.fill();
+  }
+
+  // scattered leaf speckle for texture
+  ctx.fillStyle=`hsl(${hue},45%,50%)`;
+  for(let i=0;i<10;i++){
+    ctx.fillRect(canopyCx+(rng()-0.5)*canopyW*0.8, canopyCy+(rng()-0.5)*canopyH*0.6, 2, 2);
+  }
+}
+buildConfigurable({
+  name:'Tree',
+  schema:[
+    {key:'height',label:'Height',type:'range',min:0.5,max:1.6,step:0.05},
+    {key:'widthRatio',label:'Width/Height Ratio',type:'range',min:0.3,max:1.4,step:0.05},
+    {key:'shape',label:'Canopy Shape',type:'select',options:[
+      {value:'round',label:'Round'},
+      {value:'conical',label:'Conical (Christmas)'},
+      {value:'layered',label:'Layered'},
+      {value:'windswept',label:'Windswept'},
+    ]},
+    {key:'branches',label:'Branch Stubs',type:'range',min:0,max:6,step:1},
+    {key:'lean',label:'Trunk Lean',type:'range',min:-1,max:1,step:0.1},
+    {key:'hue',label:'Foliage Hue',type:'range',min:70,max:160,step:5},
+  ],
+  defaultParams:{height:1,widthRatio:0.8,shape:'round',branches:2,lean:0,hue:120},
+  drawFn:drawTreeAdvanced,
+  previewCanvas:document.getElementById('treePreview'),
+  controlsEl:document.getElementById('treeControls'),
+  downloadBtn:document.getElementById('treeDownload'),
+  genBtn:document.getElementById('treeGenVariations'),
+  variationsEl:document.getElementById('treeVariations'),
+  thumbSize:90,
+  randomizeParams:(rng)=>({
+    height: rrange(rng,0.5,1.6),
+    widthRatio: rrange(rng,0.3,1.4),
+    shape: pick(rng,['round','conical','layered','windswept']),
+    branches: rint(rng,0,6),
+    lean: rrange(rng,-1,1),
+    hue: rint(rng,70,160),
+  })
+});
+function pick(rng,arr){ return arr[Math.floor(rng()*arr.length)]; }
+</script>
+</body>
+</html>
