@@ -377,7 +377,17 @@ buildConfigurable({
     {key:'lean',label:'Lean Direction (rad)',type:'range',min:-3.14,max:3.14,step:0.1},
     {key:'hue',label:'Foliage Hue',type:'range',min:70,max:160,step:5},
   ],
-  defaultParams:{widthRatio:1,shape:'round',branches:3,lean:0,hue:120},
+  // Feedback bias (3 liked, 7 disliked): shape was by far the cleanest
+  // signal - 3/3 liked were "round", 0/7 disliked were "round" (disliked
+  // split across windswept 4/7, conical 2/7, layered 1/7). Sampling now
+  // weights round at 70%, the other three shapes sharing the remaining
+  // 30% for occasional variety rather than dropping them entirely.
+  // branches: liked avg 6.67 (tight, 6-7) vs disliked avg 3.00 (scattered
+  // 0-8) - sampling raised to 4-8. lean: liked avg 1.49, all positive
+  // (0.45-2.61) vs disliked avg -0.53, mixed sign - sampling shifted to
+  // a positive-leaning band (0.2 to 2.8). widthRatio and hue showed
+  // heavy liked/disliked range overlap - left unchanged.
+  defaultParams:{widthRatio:1,shape:'round',branches:6,lean:1.4,hue:125},
   drawFn:drawTreeTopDownAdvanced,
   previewCanvas:document.getElementById('treePreview'),
   controlsEl:document.getElementById('treeControls'),
@@ -387,9 +397,9 @@ buildConfigurable({
   thumbSize:90,
   randomizeParams:(rng)=>({
     widthRatio: rrange(rng,0.5,1.6),
-    shape: pick(rng,['round','conical','layered','windswept']),
-    branches: rint(rng,0,8),
-    lean: rrange(rng,-3.14,3.14),
+    shape: rng()<0.7 ? 'round' : pick(rng,['conical','layered','windswept']),
+    branches: rint(rng,4,8),
+    lean: rrange(rng,0.2,2.8),
     hue: rint(rng,70,160),
   }),
   promptGenBtn:document.getElementById('treeGenPrompt'),
