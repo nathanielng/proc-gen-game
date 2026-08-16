@@ -377,21 +377,20 @@ buildConfigurable({
     {key:'lean',label:'Lean Direction (rad)',type:'range',min:-3.14,max:3.14,step:0.1},
     {key:'hue',label:'Foliage Hue',type:'range',min:70,max:160,step:5},
   ],
-  // Feedback bias, round 2 (3 liked, 6 disliked): this batch refines
-  // rather than reverses round 1. shape alone is no longer a clean
-  // signal - 3/6 disliked were also "round" this time, so round-weighted
-  // sampling (70%, unchanged) is necessary but not sufficient on its
-  // own. The real differentiators this round: widthRatio liked avg 0.93
-  // (tight, 0.83-1.07) vs disliked avg 1.19 (0.72-1.56, and specifically
-  // the 3 disliked "round" trees were the widest ones, 1.46-1.56) -
-  // sampling narrowed to 0.8-1.1. branches liked avg 5.33 (5-6) vs
-  // disliked avg 6.83 (4-8) - round 1 had pushed sampling up to 4-8,
-  // this round says pull back down: narrowed to 4-6. lean liked avg 0.78
-  // (0.20-1.19) vs disliked avg 1.75 (0.74-2.41) - round 1's 0.2-2.8
-  // band was too wide on the high end: narrowed to 0.2-1.3. hue liked
-  // avg 89.67 (72-115) vs disliked avg 116.50 (84-150) - had no signal
-  // in round 1, now narrowed to 70-115.
-  defaultParams:{widthRatio:0.95,shape:'round',branches:5,lean:0.8,hue:90},
+  // Feedback bias, round 3 (9 liked, 3 disliked). branches and lean have
+  // converged - liked/disliked averages are now nearly identical
+  // (5.11 vs 5.33, 0.76 vs 0.77), meaning round 2's tightening worked
+  // and these are no longer discriminating factors; left as-is. shape
+  // is now an even stronger signal across the full feedback history:
+  // round 1 was 3/3 liked round vs 0/7 disliked round, round 2 muddied
+  // it (3/6 disliked also round), but round 3 is 9/9 liked round vs 0/3
+  // disliked round (windswept x2, layered x1 - and the collage shows
+  // those as stretched/tilted ellipses, not round at all). Raised
+  // round-weighting from 70% to 85%. widthRatio liked avg 1.00 vs
+  // disliked avg 0.89 - mild signal, nudged the sampling floor up
+  // slightly (0.85-1.1). hue liked avg 93.33 vs disliked avg 82.00 -
+  // mild signal, nudged the sampling floor up slightly (75-115).
+  defaultParams:{widthRatio:1.0,shape:'round',branches:5,lean:0.8,hue:95},
   drawFn:drawTreeTopDownAdvanced,
   previewCanvas:document.getElementById('treePreview'),
   controlsEl:document.getElementById('treeControls'),
@@ -400,11 +399,11 @@ buildConfigurable({
   variationsEl:document.getElementById('treeVariations'),
   thumbSize:90,
   randomizeParams:(rng)=>({
-    widthRatio: rrange(rng,0.8,1.1),
-    shape: rng()<0.7 ? 'round' : pick(rng,['conical','layered','windswept']),
+    widthRatio: rrange(rng,0.85,1.1),
+    shape: rng()<0.85 ? 'round' : pick(rng,['conical','layered','windswept']),
     branches: rint(rng,4,6),
     lean: rrange(rng,0.2,1.3),
-    hue: rint(rng,70,115),
+    hue: rint(rng,75,115),
   }),
   promptGenBtn:document.getElementById('treeGenPrompt'),
   promptCopyBtn:document.getElementById('treeCopyPrompt'),
