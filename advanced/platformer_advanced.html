@@ -61,23 +61,44 @@
 </section>
 
 <section>
-  <h2>Tree</h2>
+  <h2>Tree (Conical / Christmas)</h2>
   <div class="panel">
     <div class="previewBox">
-      <canvas id="treePreview" width="220" height="260"></canvas>
-      <div><button id="treeDownload">⬇ Download PNG</button></div>
+      <canvas id="treeConicalPreview" width="220" height="260"></canvas>
+      <div><button id="treeConicalDownload">⬇ Download PNG</button></div>
     </div>
-    <div class="controls" id="treeControls"></div>
+    <div class="controls" id="treeConicalControls"></div>
   </div>
-  <div><button id="treeGenVariations">Generate 16 Variations</button></div>
+  <div><button id="treeConicalGenVariations">Generate 16 Variations</button></div>
   <div class="hint">Click a thumbnail = 👍 like. Shift+click = 👎 dislike. Double-click = load into controls above.</div>
-  <div class="variations" id="treeVariations"></div>
+  <div class="variations" id="treeConicalVariations"></div>
   <div class="promptBox">
-    <button id="treeGenPrompt">Generate Prompt from Selections</button>
-    <button id="treeDownloadCollage">⬇ Download Selected as Collage</button>
-    <button id="treeCopyPrompt">Copy Prompt</button>
-    <span class="copyStatus" id="treeCopyStatus"></span>
-    <textarea class="promptOut" id="treePromptOut" readonly placeholder="Select variations above, then click Generate Prompt. Copy the result and paste it back into the conversation to refine this generator."></textarea>
+    <button id="treeConicalGenPrompt">Generate Prompt from Selections</button>
+    <button id="treeConicalDownloadCollage">⬇ Download Selected as Collage</button>
+    <button id="treeConicalCopyPrompt">Copy Prompt</button>
+    <span class="copyStatus" id="treeConicalCopyStatus"></span>
+    <textarea class="promptOut" id="treeConicalPromptOut" readonly placeholder="Select variations above, then click Generate Prompt. Copy the result and paste it back into the conversation to refine this generator."></textarea>
+  </div>
+</section>
+
+<section>
+  <h2>Tree (Round)</h2>
+  <div class="panel">
+    <div class="previewBox">
+      <canvas id="treeRoundPreview" width="220" height="260"></canvas>
+      <div><button id="treeRoundDownload">⬇ Download PNG</button></div>
+    </div>
+    <div class="controls" id="treeRoundControls"></div>
+  </div>
+  <div><button id="treeRoundGenVariations">Generate 16 Variations</button></div>
+  <div class="hint">Click a thumbnail = 👍 like. Shift+click = 👎 dislike. Double-click = load into controls above.</div>
+  <div class="variations" id="treeRoundVariations"></div>
+  <div class="promptBox">
+    <button id="treeRoundGenPrompt">Generate Prompt from Selections</button>
+    <button id="treeRoundDownloadCollage">⬇ Download Selected as Collage</button>
+    <button id="treeRoundCopyPrompt">Copy Prompt</button>
+    <span class="copyStatus" id="treeRoundCopyStatus"></span>
+    <textarea class="promptOut" id="treeRoundPromptOut" readonly placeholder="Select variations above, then click Generate Prompt. Copy the result and paste it back into the conversation to refine this generator."></textarea>
   </div>
 </section>
 
@@ -390,22 +411,20 @@ buildConfigurable({
 // ============================================================
 // TREE — configurable height, width ratio, canopy shape, branch count
 // ============================================================
-function drawTreeAdvanced(ctx, rng, w, h, p){
+// ---------- shared trunk/branches, used by both tree variants ----------
+function drawTrunkAndBranches(ctx, w, h, p){
+  const trunkW = w*0.06;
   const baseX = w*0.5, groundY = h*0.92;
   const trunkH = h*0.5*p.height;
   const trunkTopY = groundY - trunkH;
-  const trunkW = w*0.06;
 
   ctx.fillStyle='rgba(0,0,0,0.15)';
   ctx.beginPath(); ctx.ellipse(baseX, groundY, w*0.22, h*0.03, 0, 0, Math.PI*2); ctx.fill();
 
-  // trunk with lean
-  const leanX = trunkTopY + (baseX + p.lean*w*0.15 - baseX);
   ctx.strokeStyle='#4a301a'; ctx.lineWidth=trunkW; ctx.lineCap='round';
   ctx.beginPath(); ctx.moveTo(baseX, groundY); ctx.quadraticCurveTo(baseX+p.lean*w*0.08, (groundY+trunkTopY)/2, baseX+p.lean*w*0.15, trunkTopY); ctx.stroke();
   const trunkTopX = baseX + p.lean*w*0.15;
 
-  // branch stubs
   ctx.strokeStyle='#3a2412'; ctx.lineWidth=trunkW*0.4;
   for(let i=0;i<p.branches;i++){
     const t = 0.3+ (i/(p.branches+1))*0.6;
@@ -416,98 +435,138 @@ function drawTreeAdvanced(ctx, rng, w, h, p){
     ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(bx+dir*len, by-len*0.5); ctx.stroke();
   }
 
+  return { trunkH, trunkTopY, trunkTopX };
+}
+
+// ============================================================
+// TREE (ROUND)
+// ============================================================
+function drawTreeRoundAdvanced(ctx, rng, w, h, p){
+  const { trunkH, trunkTopY, trunkTopX } = drawTrunkAndBranches(ctx, w, h, p);
   const canopyW = w*0.4*p.widthRatio;
   const canopyH = trunkH*0.9;
   const canopyCx = trunkTopX, canopyCy = trunkTopY - canopyH*0.15;
   const hue = p.hue;
-
   function foliageFill(l){ return `hsl(${hue},45%,${l}%)`; }
 
-  if(p.shape==='round'){
-    ctx.fillStyle = foliageFill(30);
-    ctx.beginPath(); ctx.arc(canopyCx, canopyCy, canopyW*0.5, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle = foliageFill(38);
-    ctx.beginPath(); ctx.arc(canopyCx-canopyW*0.18, canopyCy-canopyH*0.1, canopyW*0.3, 0, Math.PI*2); ctx.fill();
-    ctx.beginPath(); ctx.arc(canopyCx+canopyW*0.18, canopyCy-canopyH*0.1, canopyW*0.3, 0, Math.PI*2); ctx.fill();
-    ctx.fillStyle='rgba(255,255,255,0.15)';
-    ctx.beginPath(); ctx.arc(canopyCx-canopyW*0.12, canopyCy-canopyH*0.25, canopyW*0.18, 0, Math.PI*2); ctx.fill();
-  } else if(p.shape==='conical'){
-    const layers = 4;
-    for(let i=0;i<layers;i++){
-      const t = i/(layers-1);
-      const ly = canopyCy - canopyH*0.5 + canopyH*t;
-      const lw = canopyW*0.55*(1-t*0.75);
-      ctx.fillStyle = foliageFill(28+i*4);
-      ctx.beginPath();
-      ctx.moveTo(canopyCx, ly-canopyH*0.22);
-      ctx.lineTo(canopyCx+lw, ly+canopyH*0.12);
-      ctx.lineTo(canopyCx-lw, ly+canopyH*0.12);
-      ctx.closePath(); ctx.fill();
-    }
-  } else if(p.shape==='layered'){
-    const layers = 3;
-    for(let i=0;i<layers;i++){
-      const t = i/(layers-1);
-      const ly = canopyCy - canopyH*0.35 + canopyH*0.5*t;
-      const lw = canopyW*0.5*(1-t*0.3);
-      ctx.fillStyle = foliageFill(28+i*5);
-      ctx.beginPath(); ctx.ellipse(canopyCx, ly, lw, canopyH*0.16, 0, 0, Math.PI*2); ctx.fill();
-    }
-  } else if(p.shape==='windswept'){
-    ctx.fillStyle = foliageFill(32);
-    ctx.beginPath();
-    ctx.ellipse(canopyCx+canopyW*0.15, canopyCy, canopyW*0.55, canopyH*0.3, -0.3, 0, Math.PI*2);
-    ctx.fill();
-    ctx.fillStyle = foliageFill(38);
-    ctx.beginPath();
-    ctx.ellipse(canopyCx+canopyW*0.3, canopyCy-canopyH*0.08, canopyW*0.3, canopyH*0.16, -0.3, 0, Math.PI*2);
-    ctx.fill();
-  }
+  ctx.fillStyle = foliageFill(30);
+  ctx.beginPath(); ctx.arc(canopyCx, canopyCy, canopyW*0.5, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle = foliageFill(38);
+  ctx.beginPath(); ctx.arc(canopyCx-canopyW*0.18, canopyCy-canopyH*0.1, canopyW*0.3, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(canopyCx+canopyW*0.18, canopyCy-canopyH*0.1, canopyW*0.3, 0, Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.15)';
+  ctx.beginPath(); ctx.arc(canopyCx-canopyW*0.12, canopyCy-canopyH*0.25, canopyW*0.18, 0, Math.PI*2); ctx.fill();
 
-  // scattered leaf speckle for texture
   ctx.fillStyle=`hsl(${hue},45%,50%)`;
   for(let i=0;i<10;i++){
     ctx.fillRect(canopyCx+(rng()-0.5)*canopyW*0.8, canopyCy+(rng()-0.5)*canopyH*0.6, 2, 2);
   }
 }
 buildConfigurable({
-  name:'Tree',
+  name:'Tree (Round)',
   schema:[
     {key:'height',label:'Height',type:'range',min:0.5,max:1.6,step:0.05},
     {key:'widthRatio',label:'Width/Height Ratio',type:'range',min:0.3,max:1.4,step:0.05},
-    {key:'shape',label:'Canopy Shape',type:'select',options:[
-      {value:'round',label:'Round'},
-      {value:'conical',label:'Conical (Christmas)'},
-      {value:'layered',label:'Layered'},
-      {value:'windswept',label:'Windswept'},
-    ]},
     {key:'branches',label:'Branch Stubs',type:'range',min:0,max:6,step:1},
     {key:'lean',label:'Trunk Lean',type:'range',min:-1,max:1,step:0.1},
     {key:'hue',label:'Foliage Hue',type:'range',min:70,max:160,step:5},
   ],
-  defaultParams:{height:1,widthRatio:0.8,shape:'round',branches:2,lean:0,hue:120},
-  drawFn:drawTreeAdvanced,
-  previewCanvas:document.getElementById('treePreview'),
-  controlsEl:document.getElementById('treeControls'),
-  downloadBtn:document.getElementById('treeDownload'),
-  genBtn:document.getElementById('treeGenVariations'),
-  variationsEl:document.getElementById('treeVariations'),
+  defaultParams:{height:1,widthRatio:0.8,branches:2,lean:0,hue:120},
+  drawFn:drawTreeRoundAdvanced,
+  previewCanvas:document.getElementById('treeRoundPreview'),
+  controlsEl:document.getElementById('treeRoundControls'),
+  downloadBtn:document.getElementById('treeRoundDownload'),
+  genBtn:document.getElementById('treeRoundGenVariations'),
+  variationsEl:document.getElementById('treeRoundVariations'),
   thumbSize:90,
   randomizeParams:(rng)=>({
     height: rrange(rng,0.5,1.6),
     widthRatio: rrange(rng,0.3,1.4),
-    shape: pick(rng,['round','conical','layered','windswept']),
     branches: rint(rng,0,6),
     lean: rrange(rng,-1,1),
     hue: rint(rng,70,160),
   }),
-  promptGenBtn:document.getElementById('treeGenPrompt'),
-  promptCopyBtn:document.getElementById('treeCopyPrompt'),
-  promptOut:document.getElementById('treePromptOut'),
-  collageBtn:document.getElementById('treeDownloadCollage'),
+  promptGenBtn:document.getElementById('treeRoundGenPrompt'),
+  promptCopyBtn:document.getElementById('treeRoundCopyPrompt'),
+  promptOut:document.getElementById('treeRoundPromptOut'),
+  collageBtn:document.getElementById('treeRoundDownloadCollage'),
   fileName:'advanced/platformer_advanced.html',
 });
-function pick(rng,arr){ return arr[Math.floor(rng()*arr.length)]; }
+
+// ============================================================
+// TREE (CONICAL / CHRISTMAS) — stacked triangular tiers, narrowest at the
+// top and widest at the bottom, each tier overlapping the one above by a
+// configurable fraction of its own height so the apex of each lower tier
+// tucks up into the tier above it (like a real conifer's layered branches).
+// ============================================================
+function drawTreeConicalAdvanced(ctx, rng, w, h, p){
+  const { trunkH, trunkTopY, trunkTopX } = drawTrunkAndBranches(ctx, w, h, p);
+  const canopyW = w*0.4*p.widthRatio;
+  const canopyH = trunkH*0.9;
+  const canopyCx = trunkTopX;
+  const topY = trunkTopY - canopyH*0.15 - canopyH*0.5;
+  const hue = p.hue;
+  function foliageFill(l){ return `hsl(${hue},45%,${l}%)`; }
+
+  const layers = p.layers;
+  const overlap = p.overlap;
+  // tierH chosen so the stacked, overlapping tiers span exactly canopyH
+  const tierH = canopyH / (1 + (layers-1)*(1-overlap));
+  const minHalfW = canopyW*0.5*0.32;
+  const maxHalfW = canopyW*0.5;
+
+  for(let i=0;i<layers;i++){
+    const apexY = topY + i*tierH*(1-overlap);
+    const baseY = apexY + tierH;
+    const halfW = layers>1 ? minHalfW + (maxHalfW-minHalfW)*(i/(layers-1)) : maxHalfW*0.6;
+    ctx.fillStyle = foliageFill(26+i*3);
+    ctx.beginPath();
+    ctx.moveTo(canopyCx, apexY);
+    ctx.lineTo(canopyCx+halfW, baseY);
+    ctx.lineTo(canopyCx-halfW, baseY);
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.12)'; ctx.lineWidth=1; ctx.stroke();
+  }
+
+  ctx.fillStyle=`hsl(${hue},45%,50%)`;
+  for(let i=0;i<10;i++){
+    ctx.fillRect(canopyCx+(rng()-0.5)*canopyW*0.7, topY+canopyH*0.5+(rng()-0.5)*canopyH*0.8, 2, 2);
+  }
+}
+buildConfigurable({
+  name:'Tree (Conical)',
+  schema:[
+    {key:'height',label:'Height',type:'range',min:0.5,max:1.6,step:0.05},
+    {key:'widthRatio',label:'Width/Height Ratio',type:'range',min:0.3,max:1.4,step:0.05},
+    {key:'layers',label:'Triangle Tiers',type:'range',min:1,max:7,step:1},
+    {key:'overlap',label:'Tier Vertical Overlap',type:'range',min:0,max:0.4,step:0.01},
+    {key:'branches',label:'Branch Stubs',type:'range',min:0,max:6,step:1},
+    {key:'lean',label:'Trunk Lean',type:'range',min:-1,max:1,step:0.1},
+    {key:'hue',label:'Foliage Hue',type:'range',min:70,max:160,step:5},
+  ],
+  defaultParams:{height:1,widthRatio:0.8,layers:4,overlap:0.2,branches:2,lean:0,hue:120},
+  drawFn:drawTreeConicalAdvanced,
+  previewCanvas:document.getElementById('treeConicalPreview'),
+  controlsEl:document.getElementById('treeConicalControls'),
+  downloadBtn:document.getElementById('treeConicalDownload'),
+  genBtn:document.getElementById('treeConicalGenVariations'),
+  variationsEl:document.getElementById('treeConicalVariations'),
+  thumbSize:90,
+  randomizeParams:(rng)=>({
+    height: rrange(rng,0.5,1.6),
+    widthRatio: rrange(rng,0.3,1.4),
+    layers: rint(rng,1,7),
+    overlap: rrange(rng,0.12,0.3),
+    branches: rint(rng,0,6),
+    lean: rrange(rng,-1,1),
+    hue: rint(rng,70,160),
+  }),
+  promptGenBtn:document.getElementById('treeConicalGenPrompt'),
+  promptCopyBtn:document.getElementById('treeConicalCopyPrompt'),
+  promptOut:document.getElementById('treeConicalPromptOut'),
+  collageBtn:document.getElementById('treeConicalDownloadCollage'),
+  fileName:'advanced/platformer_advanced.html',
+});
 </script>
 </body>
 </html>
