@@ -643,10 +643,10 @@ function drawTreeConicalAdvanced(ctx, rng, w, h, p){
 buildConfigurable({
   name:'Tree (Conical)',
   schema:[
-    {key:'height',label:'Height',type:'range',min:0.7,max:1.4,step:0.05},
+    {key:'height',label:'Height',type:'range',min:0.7,max:1.6,step:0.05},
     {key:'widthRatio',label:'Width/Height Ratio',type:'range',min:0.8,max:1.4,step:0.05},
-    {key:'canopyStart',label:'Height Start (bare trunk, x tree height)',type:'range',min:0.25,max:0.5,step:0.01},
-    {key:'tierHeightFrac',label:'Tier Height (x tree height)',type:'range',min:0.1,max:0.18,step:0.01},
+    {key:'canopyStart',label:'Height Start (bare trunk, x tree height)',type:'range',min:0.15,max:0.38,step:0.01},
+    {key:'tierHeightFrac',label:'Tier Height (x tree height)',type:'range',min:0.11,max:0.18,step:0.01},
     {key:'overlap',label:'Tier Vertical Overlap',type:'range',min:0.28,max:0.35,step:0.01},
     {key:'apexAngleTop',label:'Apex Angle - Top Tier (°)',type:'range',min:60,max:110,step:1},
     {key:'branches',label:'Branch Stubs',type:'range',min:0,max:6,step:1},
@@ -662,10 +662,10 @@ buildConfigurable({
   variationsEl:document.getElementById('treeConicalVariations'),
   thumbSize:90,
   randomizeParams:(rng)=>({
-    height: rrange(rng,0.7,1.4),
+    height: rrange(rng,0.7,1.6),
     widthRatio: rrange(rng,0.8,1.4),
-    canopyStart: rrange(rng,0.25,0.5),
-    tierHeightFrac: rrange(rng,0.1,0.18),
+    canopyStart: rrange(rng,0.15,0.38),
+    tierHeightFrac: rrange(rng,0.11,0.18),
     overlap: rrange(rng,0.28,0.35),
     apexAngleTop: rrange(rng,60,110),
     branches: rint(rng,0,6),
