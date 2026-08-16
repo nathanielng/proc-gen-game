@@ -494,19 +494,28 @@ function drawTrunkWithBigBranches(ctx, rng, w, h, p){
   // 2D Gaussian (denser near the middle, tapering naturally toward the
   // edge - this reads as round without needing an explicit ring/arc
   // shape), and each clump's radius also drawn from a Gaussian around a
-  // mean set by Foliage Clump Size Factor. Unbounded Gaussian tails could
-  // occasionally place a clump well outside the canopy or give it a
-  // near-zero/negative radius, so both are soft-clamped afterward.
+  // mean set by Foliage Clump Size Factor. The x sigma is a function of
+  // tree width (canopyW); the y sigma is a function of tree height minus
+  // height-start - Round tree doesn't have a separate "height start"
+  // control like Conical's canopyStart, so branchStart (the fraction of
+  // trunk height below which there's no canopy/branches) fills that role
+  // here. Unbounded Gaussian tails could occasionally place a clump well
+  // outside the canopy or give it a near-zero/negative radius, so both
+  // are soft-clamped afterward (position clamp is elliptical, matching
+  // the independent x/y ranges).
   const clumps = [];
-  const posSigma = canopyR*0.42;
-  const maxDist = canopyR*1.0;
+  const availableCanopyH = trunkH*(1-p.branchStart);
+  const sigmaX = canopyW*0.21;
+  const sigmaY = availableCanopyH*0.28;
+  const maxDistX = canopyW*0.5;
+  const maxDistY = availableCanopyH*0.5;
   const radiusMean = canopyR*(0.14 + p.foliageSizeFactor*0.32);
   const radiusSigma = radiusMean*0.35;
   for(let i=0;i<p.branches;i++){
-    let dx = gaussianRand(rng)*posSigma;
-    let dy = gaussianRand(rng)*posSigma;
-    const dist = Math.hypot(dx,dy);
-    if(dist>maxDist){ const s=maxDist/dist; dx*=s; dy*=s; }
+    let dx = gaussianRand(rng)*sigmaX;
+    let dy = gaussianRand(rng)*sigmaY;
+    const normDist = Math.hypot(dx/maxDistX, dy/maxDistY);
+    if(normDist>1){ dx/=normDist; dy/=normDist; }
     const r = Math.min(canopyR*0.55, Math.max(canopyR*0.08, radiusMean + gaussianRand(rng)*radiusSigma));
     clumps.push({x:canopyCx+dx, y:canopyCy+dy, r});
   }
