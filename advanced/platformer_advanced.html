@@ -473,8 +473,9 @@ function drawTrunkWithBigBranches(ctx, rng, w, h, p){
   // Decorative branch sticks: spread evenly from branchStart up to near
   // the trunk top, using the configured start height / median angle /
   // fixed +-5deg variation. Purely visual - foliage placement below is
-  // deliberately NOT tied to these tips (see comment there).
-  const stickCount = Math.min(p.branches, 6);
+  // deliberately NOT tied to these tips (see comment there). Uses its
+  // own dedicated Branch Sticks count, independent of foliage clump count.
+  const stickCount = p.branches;
   ctx.strokeStyle='#3a2412'; ctx.lineWidth=trunkW*0.4; ctx.lineCap='round';
   for(let i=0;i<stickCount;i++){
     const baseT = stickCount>1 ? p.branchStart + (i/(stickCount-1))*(0.95-p.branchStart) : (p.branchStart+0.95)/2;
@@ -490,32 +491,36 @@ function drawTrunkWithBigBranches(ctx, rng, w, h, p){
     ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(tipX,tipY); ctx.stroke();
   }
 
-  // Foliage clump anchors: x/y offsets from canopy center drawn from a
-  // 2D Gaussian (denser near the middle, tapering naturally toward the
-  // edge - this reads as round without needing an explicit ring/arc
-  // shape), and each clump's radius also drawn from a Gaussian around a
-  // mean set by Foliage Clump Size Factor. The x sigma is a function of
-  // tree width (canopyW); the y sigma is a function of tree height minus
-  // height-start - Round tree doesn't have a separate "height start"
-  // control like Conical's canopyStart, so branchStart (the fraction of
-  // trunk height below which there's no canopy/branches) fills that role
-  // here. Unbounded Gaussian tails could occasionally place a clump well
-  // outside the canopy or give it a near-zero/negative radius, so both
-  // are soft-clamped afterward (position clamp is elliptical, matching
-  // the independent x/y ranges).
+  // Foliage clump anchors: a hybrid of a stratified ring and Gaussian
+  // jitter. Pure Gaussian placement (the previous approach) doesn't
+  // *guarantee* even coverage - with a modest clump count it can leave
+  // visible gaps or bunch up by chance. A plain polygon ring guarantees
+  // coverage but looks mechanical. So: divide the full circle into
+  // clumpCount angular sectors (one clump per sector - this is "the
+  // polygon points" brought back), place each clump at a random radius
+  // within its sector, then layer Gaussian jitter on top of that
+  // position for organic irregularity. Radius is still drawn from a
+  // Gaussian around a mean set by Foliage Clump Size Factor. The x
+  // envelope is a function of tree width (canopyW); the y envelope is a
+  // function of tree height minus height-start - Round tree doesn't have
+  // a separate "height start" control like Conical's canopyStart, so
+  // branchStart (the fraction of trunk height below which there's no
+  // canopy/branches) fills that role here.
   const clumps = [];
+  const clumpCount = p.clumpCount;
   const availableCanopyH = trunkH*(1-p.branchStart);
   const sigmaX = canopyW*0.21;
   const sigmaY = availableCanopyH*0.28;
   const maxDistX = canopyW*0.5;
   const maxDistY = availableCanopyH*0.5;
-  // Radius floor raised (0.22x-0.6x canopyR, was 0.08x-0.55x) so clumps
-  // start from larger values per feedback, rather than skewing toward tiny.
   const radiusMean = canopyR*(0.28 + p.foliageSizeFactor*0.32);
   const radiusSigma = radiusMean*0.3;
-  for(let i=0;i<p.branches;i++){
-    let dx = gaussianRand(rng)*sigmaX;
-    let dy = gaussianRand(rng)*sigmaY;
+  for(let i=0;i<clumpCount;i++){
+    const sectorWidth = Math.PI*2/clumpCount;
+    const angle = i*sectorWidth + (rng()-0.5)*sectorWidth*0.7;
+    const radiusFrac = 0.5 + rng()*0.45;
+    let dx = Math.sin(angle)*maxDistX*radiusFrac + gaussianRand(rng)*sigmaX*0.3;
+    let dy = -Math.cos(angle)*maxDistY*radiusFrac + gaussianRand(rng)*sigmaY*0.3;
     const normDist = Math.hypot(dx/maxDistX, dy/maxDistY);
     if(normDist>1){ dx/=normDist; dy/=normDist; }
     const r = Math.min(canopyR*0.6, Math.max(canopyR*0.22, radiusMean + gaussianRand(rng)*radiusSigma));
@@ -552,17 +557,18 @@ buildConfigurable({
   name:'Tree (Round)',
   schema:[
     {key:'height',label:'Height',type:'range',min:0.7,max:1.2,step:0.05},
-    {key:'widthRatio',label:'Width/Height Ratio',type:'range',min:1.1,max:1.7,step:0.05},
-    {key:'branches',label:'Branches',type:'range',min:14,max:22,step:1},
+    {key:'widthRatio',label:'Width/Height Ratio',type:'range',min:1.0,max:1.5,step:0.05},
+    {key:'clumpCount',label:'Foliage Clump Count',type:'range',min:10,max:18,step:1},
+    {key:'branches',label:'Branch Sticks',type:'range',min:3,max:6,step:1},
     {key:'branchStart',label:'Branch Start Height (x trunk)',type:'range',min:0.25,max:0.55,step:0.01},
     {key:'branchAngle',label:'Branch Angle (median, °)',type:'range',min:10,max:30,step:1},
-    {key:'foliageSizeFactor',label:'Foliage Clump Size Factor',type:'range',min:0.3,max:0.9,step:0.05},
+    {key:'foliageSizeFactor',label:'Foliage Clump Size Factor',type:'range',min:0.5,max:0.9,step:0.05},
     {key:'lean',label:'Trunk Lean',type:'range',min:-0.2,max:0.2,step:0.02},
     {key:'hue',label:'Foliage Hue',type:'range',min:70,max:160,step:5},
   ],
   // branchAngleVar is fixed at +/-5deg per feedback (no longer a slider),
   // still carried in params since the render function reads p.branchAngleVar
-  defaultParams:{height:0.95,widthRatio:1.4,branches:18,branchStart:0.35,branchAngle:20,branchAngleVar:5,foliageSizeFactor:0.6,lean:0,hue:120},
+  defaultParams:{height:0.95,widthRatio:1.2,clumpCount:14,branches:5,branchStart:0.35,branchAngle:20,branchAngleVar:5,foliageSizeFactor:0.7,lean:0,hue:120},
   drawFn:drawTreeRoundAdvanced,
   previewCanvas:document.getElementById('treeRoundPreview'),
   controlsEl:document.getElementById('treeRoundControls'),
@@ -572,12 +578,13 @@ buildConfigurable({
   thumbSize:90,
   randomizeParams:(rng)=>({
     height: rrange(rng,0.7,1.2),
-    widthRatio: rrange(rng,1.1,1.7),
-    branches: rint(rng,14,22),
+    widthRatio: rrange(rng,1.0,1.5),
+    clumpCount: rint(rng,10,18),
+    branches: rint(rng,3,6),
     branchStart: rrange(rng,0.25,0.55),
     branchAngle: rrange(rng,10,30),
     branchAngleVar: 5,
-    foliageSizeFactor: rrange(rng,0.3,0.9),
+    foliageSizeFactor: rrange(rng,0.5,0.9),
     lean: rrange(rng,-0.2,0.2),
     hue: rint(rng,70,160),
   }),
