@@ -441,19 +441,67 @@ function drawTrunkAndBranches(ctx, w, h, p){
 // ============================================================
 // TREE (ROUND)
 // ============================================================
-function drawTreeRoundAdvanced(ctx, rng, w, h, p){
-  const { trunkH, trunkTopY, trunkTopX } = drawTrunkAndBranches(ctx, w, h, p);
+// Round tree gets its own trunk+branch renderer (distinct from the small
+// cosmetic stubs shared by Conical): branches are real structural limbs
+// that also serve as anchor points for foliage clumps below.
+function drawTrunkWithBigBranches(ctx, rng, w, h, p){
+  const trunkW = w*0.06;
+  const baseX = w*0.5, groundY = h*0.92;
+  const trunkH = h*0.5*p.height;
+  const trunkTopY = groundY - trunkH;
   const canopyW = w*0.4*p.widthRatio;
+
+  ctx.fillStyle='rgba(0,0,0,0.15)';
+  ctx.beginPath(); ctx.ellipse(baseX, groundY, w*0.22, h*0.03, 0, 0, Math.PI*2); ctx.fill();
+
+  ctx.strokeStyle='#4a301a'; ctx.lineWidth=trunkW; ctx.lineCap='round';
+  ctx.beginPath(); ctx.moveTo(baseX, groundY); ctx.quadraticCurveTo(baseX+p.lean*w*0.08, (groundY+trunkTopY)/2, baseX+p.lean*w*0.15, trunkTopY); ctx.stroke();
+  const trunkTopX = baseX + p.lean*w*0.15;
+
+  // branches: spread evenly from branchStart up to near the trunk top,
+  // each with a random left/right side, length (0.2x-0.7x canopy width),
+  // and angle from vertical (median ± variation, both configurable)
+  const branchTips = [];
+  ctx.strokeStyle='#3a2412'; ctx.lineWidth=trunkW*0.45; ctx.lineCap='round';
+  for(let i=0;i<p.branches;i++){
+    const baseT = p.branches>1 ? p.branchStart + (i/(p.branches-1))*(0.95-p.branchStart) : (p.branchStart+0.95)/2;
+    const t = Math.min(0.97, Math.max(p.branchStart, baseT + (rng()-0.5)*0.04));
+    const by = groundY - trunkH*t;
+    const bx = baseX + (trunkTopX-baseX)*t;
+    const dir = rng()>0.5 ? 1 : -1;
+    const angleDeg = p.branchAngle + (rng()-0.5)*2*p.branchAngleVar;
+    const angleRad = angleDeg*Math.PI/180;
+    const len = canopyW*(0.2 + rng()*0.5); // 0.2x-0.7x of canopy width
+    const tipX = bx + dir*Math.sin(angleRad)*len;
+    const tipY = by - Math.cos(angleRad)*len;
+    ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(tipX,tipY); ctx.stroke();
+    branchTips.push({x:tipX, y:tipY, len});
+  }
+
+  return { trunkH, trunkTopY, trunkTopX, canopyW, branchTips };
+}
+function drawTreeRoundAdvanced(ctx, rng, w, h, p){
+  const { trunkH, trunkTopY, trunkTopX, canopyW, branchTips } = drawTrunkWithBigBranches(ctx, rng, w, h, p);
   const canopyH = trunkH*0.9;
   const canopyCx = trunkTopX, canopyCy = trunkTopY - canopyH*0.15;
   const hue = p.hue;
   function foliageFill(l){ return `hsl(${hue},45%,${l}%)`; }
 
+  // core foliage mass around the trunk top, so the tree isn't sparse
+  // when there are few/short branches
   ctx.fillStyle = foliageFill(30);
-  ctx.beginPath(); ctx.arc(canopyCx, canopyCy, canopyW*0.5, 0, Math.PI*2); ctx.fill();
-  ctx.fillStyle = foliageFill(38);
-  ctx.beginPath(); ctx.arc(canopyCx-canopyW*0.18, canopyCy-canopyH*0.1, canopyW*0.3, 0, Math.PI*2); ctx.fill();
-  ctx.beginPath(); ctx.arc(canopyCx+canopyW*0.18, canopyCy-canopyH*0.1, canopyW*0.3, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(canopyCx, canopyCy, canopyW*0.32, 0, Math.PI*2); ctx.fill();
+
+  // a foliage clump at each branch tip - this is "where to draw them":
+  // anchored to the actual branch endpoints so bigger/longer branches
+  // read as bigger clumps, and the canopy silhouette follows the branches
+  // instead of being independent of them
+  branchTips.forEach((tip,i)=>{
+    const r = Math.max(canopyW*0.14, tip.len*0.42);
+    ctx.fillStyle = foliageFill(28 + (i%3)*5);
+    ctx.beginPath(); ctx.arc(tip.x, tip.y, r, 0, Math.PI*2); ctx.fill();
+  });
+
   ctx.fillStyle='rgba(255,255,255,0.15)';
   ctx.beginPath(); ctx.arc(canopyCx-canopyW*0.12, canopyCy-canopyH*0.25, canopyW*0.18, 0, Math.PI*2); ctx.fill();
 
@@ -466,12 +514,15 @@ buildConfigurable({
   name:'Tree (Round)',
   schema:[
     {key:'height',label:'Height',type:'range',min:0.5,max:1.6,step:0.05},
-    {key:'widthRatio',label:'Width/Height Ratio',type:'range',min:0.3,max:1.4,step:0.05},
-    {key:'branches',label:'Branch Stubs',type:'range',min:0,max:6,step:1},
+    {key:'widthRatio',label:'Width/Height Ratio',type:'range',min:1.0,max:1.5,step:0.05},
+    {key:'branches',label:'Branches',type:'range',min:1,max:8,step:1},
+    {key:'branchStart',label:'Branch Start Height (x trunk)',type:'range',min:0.35,max:0.55,step:0.01},
+    {key:'branchAngle',label:'Branch Angle (median, °)',type:'range',min:10,max:30,step:1},
+    {key:'branchAngleVar',label:'Branch Angle Variation (±°)',type:'range',min:0,max:5,step:0.5},
     {key:'lean',label:'Trunk Lean',type:'range',min:-1,max:1,step:0.1},
     {key:'hue',label:'Foliage Hue',type:'range',min:70,max:160,step:5},
   ],
-  defaultParams:{height:1,widthRatio:0.8,branches:2,lean:0,hue:120},
+  defaultParams:{height:1,widthRatio:1.2,branches:4,branchStart:0.45,branchAngle:20,branchAngleVar:3,lean:0,hue:120},
   drawFn:drawTreeRoundAdvanced,
   previewCanvas:document.getElementById('treeRoundPreview'),
   controlsEl:document.getElementById('treeRoundControls'),
@@ -481,8 +532,11 @@ buildConfigurable({
   thumbSize:90,
   randomizeParams:(rng)=>({
     height: rrange(rng,0.5,1.6),
-    widthRatio: rrange(rng,0.3,1.4),
-    branches: rint(rng,0,6),
+    widthRatio: rrange(rng,1.0,1.5),
+    branches: rint(rng,1,8),
+    branchStart: rrange(rng,0.35,0.55),
+    branchAngle: rrange(rng,10,30),
+    branchAngleVar: rrange(rng,0,5),
     lean: rrange(rng,-1,1),
     hue: rint(rng,70,160),
   }),
@@ -537,14 +591,14 @@ buildConfigurable({
   name:'Tree (Conical)',
   schema:[
     {key:'height',label:'Height',type:'range',min:0.5,max:1.6,step:0.05},
-    {key:'widthRatio',label:'Width/Height Ratio',type:'range',min:0.3,max:1.4,step:0.05},
+    {key:'widthRatio',label:'Width/Height Ratio',type:'range',min:1.0,max:1.5,step:0.05},
     {key:'layers',label:'Triangle Tiers',type:'range',min:1,max:7,step:1},
     {key:'overlap',label:'Tier Vertical Overlap',type:'range',min:0,max:0.4,step:0.01},
     {key:'branches',label:'Branch Stubs',type:'range',min:0,max:6,step:1},
     {key:'lean',label:'Trunk Lean',type:'range',min:-1,max:1,step:0.1},
     {key:'hue',label:'Foliage Hue',type:'range',min:70,max:160,step:5},
   ],
-  defaultParams:{height:1,widthRatio:0.8,layers:4,overlap:0.2,branches:2,lean:0,hue:120},
+  defaultParams:{height:1,widthRatio:1.2,layers:4,overlap:0.2,branches:2,lean:0,hue:120},
   drawFn:drawTreeConicalAdvanced,
   previewCanvas:document.getElementById('treeConicalPreview'),
   controlsEl:document.getElementById('treeConicalControls'),
@@ -554,7 +608,7 @@ buildConfigurable({
   thumbSize:90,
   randomizeParams:(rng)=>({
     height: rrange(rng,0.5,1.6),
-    widthRatio: rrange(rng,0.3,1.4),
+    widthRatio: rrange(rng,1.0,1.5),
     layers: rint(rng,1,7),
     overlap: rrange(rng,0.12,0.3),
     branches: rint(rng,0,6),
