@@ -492,12 +492,19 @@ function drawTreeRoundAdvanced(ctx, rng, w, h, p){
   ctx.fillStyle = foliageFill(30);
   ctx.beginPath(); ctx.arc(canopyCx, canopyCy, canopyW*0.32, 0, Math.PI*2); ctx.fill();
 
-  // a foliage clump at each branch tip - this is "where to draw them":
-  // anchored to the actual branch endpoints so bigger/longer branches
-  // read as bigger clumps, and the canopy silhouette follows the branches
-  // instead of being independent of them
+  // a foliage clump at each branch tip - anchored to the actual branch
+  // endpoints so the canopy silhouette follows the branch structure.
+  // Radius is sized from the remaining horizontal room to the canopy's
+  // width envelope (canopyW/2), not from raw branch length: a branch's
+  // *length* isn't the same as its *horizontal reach* once angle is
+  // factored in, and sizing off length alone let long, steep branches
+  // push their clump past the intended width envelope. Using the actual
+  // horizontal offset keeps every clump's outer edge close to canopyW/2,
+  // so the tree stays within its configured Width/Height Ratio.
+  const canopyHalfW = canopyW*0.5;
   branchTips.forEach((tip,i)=>{
-    const r = Math.max(canopyW*0.14, tip.len*0.42);
+    const horizReach = Math.abs(tip.x - canopyCx);
+    const r = Math.max(canopyW*0.08, (canopyHalfW - horizReach) * p.foliageSizeFactor);
     ctx.fillStyle = foliageFill(28 + (i%3)*5);
     ctx.beginPath(); ctx.arc(tip.x, tip.y, r, 0, Math.PI*2); ctx.fill();
   });
@@ -513,16 +520,18 @@ function drawTreeRoundAdvanced(ctx, rng, w, h, p){
 buildConfigurable({
   name:'Tree (Round)',
   schema:[
-    {key:'height',label:'Height',type:'range',min:0.5,max:1.6,step:0.05},
-    {key:'widthRatio',label:'Width/Height Ratio',type:'range',min:1.0,max:1.5,step:0.05},
-    {key:'branches',label:'Branches',type:'range',min:1,max:8,step:1},
-    {key:'branchStart',label:'Branch Start Height (x trunk)',type:'range',min:0.35,max:0.55,step:0.01},
+    {key:'height',label:'Height',type:'range',min:0.7,max:1.2,step:0.05},
+    {key:'widthRatio',label:'Width/Height Ratio',type:'range',min:1.1,max:1.7,step:0.05},
+    {key:'branches',label:'Branches',type:'range',min:8,max:12,step:1},
+    {key:'branchStart',label:'Branch Start Height (x trunk)',type:'range',min:0.25,max:0.55,step:0.01},
     {key:'branchAngle',label:'Branch Angle (median, °)',type:'range',min:10,max:30,step:1},
-    {key:'branchAngleVar',label:'Branch Angle Variation (±°)',type:'range',min:0,max:5,step:0.5},
+    {key:'foliageSizeFactor',label:'Foliage Clump Size Factor',type:'range',min:0.3,max:0.9,step:0.05},
     {key:'lean',label:'Trunk Lean',type:'range',min:-1,max:1,step:0.1},
     {key:'hue',label:'Foliage Hue',type:'range',min:70,max:160,step:5},
   ],
-  defaultParams:{height:1,widthRatio:1.2,branches:4,branchStart:0.45,branchAngle:20,branchAngleVar:3,lean:0,hue:120},
+  // branchAngleVar is fixed at +/-5deg per feedback (no longer a slider),
+  // still carried in params since the render function reads p.branchAngleVar
+  defaultParams:{height:0.95,widthRatio:1.4,branches:10,branchStart:0.35,branchAngle:20,branchAngleVar:5,foliageSizeFactor:0.6,lean:0,hue:120},
   drawFn:drawTreeRoundAdvanced,
   previewCanvas:document.getElementById('treeRoundPreview'),
   controlsEl:document.getElementById('treeRoundControls'),
@@ -531,12 +540,13 @@ buildConfigurable({
   variationsEl:document.getElementById('treeRoundVariations'),
   thumbSize:90,
   randomizeParams:(rng)=>({
-    height: rrange(rng,0.5,1.6),
-    widthRatio: rrange(rng,1.0,1.5),
-    branches: rint(rng,1,8),
-    branchStart: rrange(rng,0.35,0.55),
+    height: rrange(rng,0.7,1.2),
+    widthRatio: rrange(rng,1.1,1.7),
+    branches: rint(rng,8,12),
+    branchStart: rrange(rng,0.25,0.55),
     branchAngle: rrange(rng,10,30),
-    branchAngleVar: rrange(rng,0,5),
+    branchAngleVar: 5,
+    foliageSizeFactor: rrange(rng,0.3,0.9),
     lean: rrange(rng,-1,1),
     hue: rint(rng,70,160),
   }),
