@@ -568,7 +568,18 @@ buildConfigurable({
   ],
   // branchAngleVar is fixed at +/-5deg per feedback (no longer a slider),
   // still carried in params since the render function reads p.branchAngleVar
-  defaultParams:{height:0.95,widthRatio:1.2,clumpCount:14,branches:5,branchStart:0.35,branchAngle:20,branchAngleVar:5,foliageSizeFactor:0.7,lean:0,hue:120},
+  //
+  // Feedback bias (3 liked, 5 disliked): branches (decorative stick
+  // count) was the strongest signal by far - liked range (3-4) and
+  // disliked range (5-6) don't overlap at all, so fewer visible trunk
+  // sticks read better. widthRatio's liked cluster was very tight
+  // (1.25-1.28) versus a much wider disliked spread (1.00-1.36) - biased
+  // sampling toward that liked band. height and foliageSizeFactor showed
+  // a mild lean (liked tighter/higher for height, tighter/lower for
+  // foliageSizeFactor) so their ranges were nudged, not overhauled.
+  // clumpCount, branchStart, branchAngle, lean, and hue all showed heavy
+  // liked/disliked overlap - left unchanged.
+  defaultParams:{height:0.95,widthRatio:1.27,clumpCount:14,branches:3,branchStart:0.35,branchAngle:20,branchAngleVar:5,foliageSizeFactor:0.72,lean:0,hue:120},
   drawFn:drawTreeRoundAdvanced,
   previewCanvas:document.getElementById('treeRoundPreview'),
   controlsEl:document.getElementById('treeRoundControls'),
@@ -577,14 +588,14 @@ buildConfigurable({
   variationsEl:document.getElementById('treeRoundVariations'),
   thumbSize:90,
   randomizeParams:(rng)=>({
-    height: rrange(rng,0.7,1.2),
-    widthRatio: rrange(rng,1.0,1.5),
+    height: rrange(rng,0.85,1.05),
+    widthRatio: rrange(rng,1.2,1.35),
     clumpCount: rint(rng,10,18),
-    branches: rint(rng,3,6),
+    branches: rint(rng,3,4),
     branchStart: rrange(rng,0.25,0.55),
     branchAngle: rrange(rng,10,30),
     branchAngleVar: 5,
-    foliageSizeFactor: rrange(rng,0.5,0.9),
+    foliageSizeFactor: rrange(rng,0.6,0.8),
     lean: rrange(rng,-0.2,0.2),
     hue: rint(rng,70,160),
   }),
