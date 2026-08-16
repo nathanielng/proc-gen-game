@@ -555,10 +555,12 @@ buildConfigurable({
 // ============================================================
 function drawTreeConicalAdvanced(ctx, rng, w, h, p){
   const { trunkH, trunkTopY, trunkTopX } = drawTrunkAndBranches(ctx, w, h, p);
-  const canopyW = w*0.4*p.widthRatio;
-  const canopyH = trunkH*0.9;
+  // canopyStart = fraction of trunk height left bare below the canopy, so
+  // the trunk is visibly exposed under the lowest tier (per reference image).
+  // The topmost tier's apex sits exactly at the top of the trunk.
+  const canopyH = trunkH*(1-p.canopyStart);
   const canopyCx = trunkTopX;
-  const topY = trunkTopY - canopyH*0.15 - canopyH*0.5;
+  const topY = trunkTopY;
   const hue = p.hue;
   function foliageFill(l){ return `hsl(${hue},45%,${l}%)`; }
 
@@ -566,13 +568,15 @@ function drawTreeConicalAdvanced(ctx, rng, w, h, p){
   const overlap = p.overlap;
   // tierH chosen so the stacked, overlapping tiers span exactly canopyH
   const tierH = canopyH / (1 + (layers-1)*(1-overlap));
-  const minHalfW = canopyW*0.5*0.32;
-  const maxHalfW = canopyW*0.5;
 
   for(let i=0;i<layers;i++){
     const apexY = topY + i*tierH*(1-overlap);
     const baseY = apexY + tierH;
-    const halfW = layers>1 ? minHalfW + (maxHalfW-minHalfW)*(i/(layers-1)) : maxHalfW*0.6;
+    // apex angle interpolates from the narrow top-tier angle to the wide
+    // bottom-tier angle; half-width derives from that angle and this
+    // tier's height, then widthRatio scales the whole silhouette
+    const angleDeg = layers>1 ? p.apexAngleTop + (p.apexAngleBottom-p.apexAngleTop)*(i/(layers-1)) : (p.apexAngleTop+p.apexAngleBottom)/2;
+    const halfW = tierH * Math.tan(angleDeg*Math.PI/360) * p.widthRatio;
     ctx.fillStyle = foliageFill(26+i*3);
     ctx.beginPath();
     ctx.moveTo(canopyCx, apexY);
@@ -582,23 +586,27 @@ function drawTreeConicalAdvanced(ctx, rng, w, h, p){
     ctx.strokeStyle='rgba(0,0,0,0.12)'; ctx.lineWidth=1; ctx.stroke();
   }
 
+  const maxHalfW = tierH * Math.tan(p.apexAngleBottom*Math.PI/360) * p.widthRatio;
   ctx.fillStyle=`hsl(${hue},45%,50%)`;
   for(let i=0;i<10;i++){
-    ctx.fillRect(canopyCx+(rng()-0.5)*canopyW*0.7, topY+canopyH*0.5+(rng()-0.5)*canopyH*0.8, 2, 2);
+    ctx.fillRect(canopyCx+(rng()-0.5)*maxHalfW*1.4, topY+canopyH*0.5+(rng()-0.5)*canopyH*0.8, 2, 2);
   }
 }
 buildConfigurable({
   name:'Tree (Conical)',
   schema:[
-    {key:'height',label:'Height',type:'range',min:0.5,max:1.6,step:0.05},
-    {key:'widthRatio',label:'Width/Height Ratio',type:'range',min:1.0,max:1.5,step:0.05},
-    {key:'layers',label:'Triangle Tiers',type:'range',min:1,max:7,step:1},
-    {key:'overlap',label:'Tier Vertical Overlap',type:'range',min:0,max:0.4,step:0.01},
+    {key:'height',label:'Height',type:'range',min:0.7,max:1.15,step:0.05},
+    {key:'widthRatio',label:'Width/Height Ratio',type:'range',min:0.8,max:1.4,step:0.05},
+    {key:'canopyStart',label:'Height Start (bare trunk, x tree height)',type:'range',min:0.25,max:0.5,step:0.01},
+    {key:'layers',label:'Triangle Tiers',type:'range',min:4,max:6,step:1},
+    {key:'overlap',label:'Tier Vertical Overlap',type:'range',min:0.28,max:0.35,step:0.01},
+    {key:'apexAngleTop',label:'Apex Angle - Top Tier (°)',type:'range',min:60,max:110,step:1},
+    {key:'apexAngleBottom',label:'Apex Angle - Bottom Tier (°)',type:'range',min:100,max:150,step:1},
     {key:'branches',label:'Branch Stubs',type:'range',min:0,max:6,step:1},
-    {key:'lean',label:'Trunk Lean',type:'range',min:-1,max:1,step:0.1},
+    {key:'lean',label:'Trunk Lean',type:'range',min:-0.2,max:0.2,step:0.02},
     {key:'hue',label:'Foliage Hue',type:'range',min:70,max:160,step:5},
   ],
-  defaultParams:{height:1,widthRatio:1.2,layers:4,overlap:0.2,branches:2,lean:0,hue:120},
+  defaultParams:{height:0.9,widthRatio:1.1,canopyStart:0.35,layers:5,overlap:0.31,apexAngleTop:90,apexAngleBottom:130,branches:2,lean:0,hue:120},
   drawFn:drawTreeConicalAdvanced,
   previewCanvas:document.getElementById('treeConicalPreview'),
   controlsEl:document.getElementById('treeConicalControls'),
@@ -606,15 +614,21 @@ buildConfigurable({
   genBtn:document.getElementById('treeConicalGenVariations'),
   variationsEl:document.getElementById('treeConicalVariations'),
   thumbSize:90,
-  randomizeParams:(rng)=>({
-    height: rrange(rng,0.5,1.6),
-    widthRatio: rrange(rng,1.0,1.5),
-    layers: rint(rng,1,7),
-    overlap: rrange(rng,0.12,0.3),
-    branches: rint(rng,0,6),
-    lean: rrange(rng,-1,1),
-    hue: rint(rng,70,160),
-  }),
+  randomizeParams:(rng)=>{
+    const apexAngleTop = rrange(rng,60,110);
+    const apexAngleBottom = Math.max(apexAngleTop+15, rrange(rng,100,150));
+    return {
+      height: rrange(rng,0.7,1.15),
+      widthRatio: rrange(rng,0.8,1.4),
+      canopyStart: rrange(rng,0.25,0.5),
+      layers: rint(rng,4,6),
+      overlap: rrange(rng,0.28,0.35),
+      apexAngleTop, apexAngleBottom,
+      branches: rint(rng,0,6),
+      lean: rrange(rng,-0.2,0.2),
+      hue: rint(rng,70,160),
+    };
+  },
   promptGenBtn:document.getElementById('treeConicalGenPrompt'),
   promptCopyBtn:document.getElementById('treeConicalCopyPrompt'),
   promptOut:document.getElementById('treeConicalPromptOut'),
