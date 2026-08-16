@@ -93,8 +93,11 @@ function rockRadii(rng, edges, irregularity){
   // indentation (a vertex pulled in much further than neighbors reads as
   // a concave notch). At most one indentation is kept; extra ones and all
   // spikes are relaxed toward the local neighbor average.
+  // Floor irregularity so a slider value of 0 never collapses into a
+  // perfect circle - even the "smoothest" rock should read as faceted.
+  const effIrregularity = 0.22 + irregularity*0.78;
   const radii = [];
-  for(let i=0;i<edges;i++) radii.push(1 + (rng()-0.5)*irregularity);
+  for(let i=0;i<edges;i++) radii.push(1 + (rng()-0.5)*effIrregularity);
   for(let pass=0; pass<2; pass++){
     for(let i=0;i<edges;i++){
       const prev = radii[(i-1+edges)%edges], next = radii[(i+1)%edges];
@@ -429,7 +432,10 @@ function drawRockTopDownAdvanced(ctx, rng, w, h, p){
 
   if(p.moss>0){
     ctx.fillStyle='rgba(90,150,80,0.35)';
-    for(let i=0;i<p.moss;i++) ctx.beginPath(), ctx.arc(cx+(rng()-0.5)*baseR*p.elongation, cy+(rng()-0.5)*baseR/p.elongation, baseR*0.1, 0, Math.PI*2), ctx.fill();
+    for(let i=0;i<p.moss;i++){
+      const mossScale = 1 + rng()*0.3; // 1.0x-1.3x patch size variation
+      ctx.beginPath(); ctx.arc(cx+(rng()-0.5)*baseR*p.elongation, cy+(rng()-0.5)*baseR/p.elongation, baseR*0.1*mossScale, 0, Math.PI*2); ctx.fill();
+    }
   }
 }
 buildConfigurable({
