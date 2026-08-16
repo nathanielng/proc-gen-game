@@ -332,6 +332,8 @@ function buildConfigurable(opts){
 
   buildControls();
   renderPreview();
+  genBtn.onclick(); // auto-generate a batch on load - it's local canvas
+                     // rendering, not an API call, so this is free
   return { loadParams };
 }
 
