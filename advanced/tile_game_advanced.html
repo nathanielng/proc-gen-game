@@ -449,7 +449,12 @@ buildConfigurable({
     {key:'hueSat',label:'Saturation %',type:'range',min:0,max:30,step:2},
     {key:'light',label:'Lightness %',type:'range',min:30,max:70,step:2},
   ],
-  defaultParams:{edges:7,irregularity:0.4,elongation:1,moss:2,hue:210,hueSat:8,light:48},
+  // randomizeParams biased using the same learnings as Platformer Rock's
+  // feedback round: avoid low-edge shapes that read as flat gems/
+  // diamonds rather than rocks, avoid washed-out low-saturation results,
+  // and trim the pastel-washed lightness ceiling. moss (already has its
+  // own 1.0x-1.3x size-variation learning applied) left untouched.
+  defaultParams:{edges:9,irregularity:0.4,elongation:1,moss:2,hue:210,hueSat:14,light:44},
   drawFn:drawRockTopDownAdvanced,
   previewCanvas:document.getElementById('rockPreview'),
   controlsEl:document.getElementById('rockControls'),
@@ -458,13 +463,13 @@ buildConfigurable({
   variationsEl:document.getElementById('rockVariations'),
   thumbSize:80,
   randomizeParams:(rng)=>({
-    edges: rint(rng,4,14),
+    edges: rint(rng,7,14),
     irregularity: rrange(rng,0,1),
     elongation: rrange(rng,0.6,1.8),
     moss: rint(rng,0,6),
     hue: rint(rng,0,360),
-    hueSat: rint(rng,0,30),
-    light: rint(rng,30,70),
+    hueSat: rint(rng,10,28),
+    light: rint(rng,32,58),
   }),
   promptGenBtn:document.getElementById('rockGenPrompt'),
   promptCopyBtn:document.getElementById('rockCopyPrompt'),

@@ -503,7 +503,12 @@ buildConfigurable({
     {key:'hueSat',label:'Saturation %',type:'range',min:0,max:30,step:2},
     {key:'light',label:'Lightness %',type:'range',min:25,max:60,step:2},
   ],
-  defaultParams:{edges:8,irregularity:0.45,elongation:1,craters:4,hue:30,hueSat:10,light:42},
+  // randomizeParams biased using the same learnings as Platformer Rock's
+  // feedback round: avoid low-edge shapes that read as flat gems/
+  // diamonds rather than rocks, avoid washed-out low-saturation results,
+  // and trim the pastel-washed lightness ceiling. craters/elongation/
+  // irregularity/hue left untouched - no Asteroid-specific feedback yet.
+  defaultParams:{edges:9,irregularity:0.45,elongation:1,craters:4,hue:30,hueSat:16,light:38},
   drawFn:drawAsteroidAdvanced,
   previewCanvas:document.getElementById('astPreview'),
   controlsEl:document.getElementById('astControls'),
@@ -512,13 +517,13 @@ buildConfigurable({
   variationsEl:document.getElementById('astVariations'),
   thumbSize:80,
   randomizeParams:(rng)=>({
-    edges: rint(rng,4,14),
+    edges: rint(rng,7,14),
     irregularity: rrange(rng,0,1),
     elongation: rrange(rng,0.6,1.8),
     craters: rint(rng,0,10),
     hue: rint(rng,0,60),
-    hueSat: rint(rng,0,30),
-    light: rint(rng,25,60),
+    hueSat: rint(rng,8,26),
+    light: rint(rng,28,52),
   }),
   promptGenBtn:document.getElementById('astGenPrompt'),
   promptCopyBtn:document.getElementById('astCopyPrompt'),
