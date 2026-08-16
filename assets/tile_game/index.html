@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Tile Game Asset Pack</title>
+<style>
+  body{margin:0;background:#12141c;color:#eee;font-family:sans-serif}
+  header{position:sticky;top:0;background:#1a1d29;padding:14px 20px;border-bottom:1px solid #333;z-index:5}
+  h1{font-size:18px;margin:0 0 6px}
+  section{padding:20px}
+  h2{font-size:15px;color:#9ab;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px}
+  .row{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:30px}
+  .card{background:#1a1d29;border:1px solid #2c3142;border-radius:8px;padding:10px;text-align:center;width:120px}
+  canvas{background:#0e1018;border-radius:4px;display:block;margin:0 auto 8px}
+  button{background:#2b3550;color:#fff;border:1px solid #4a5a8a;padding:5px 10px;border-radius:5px;cursor:pointer;font-size:11px;margin:2px}
+  button:hover{background:#3a4770}
+  .catbtn{font-size:13px;padding:7px 14px}
+</style>
+</head>
+<body>
+<header>
+  <h1>2D Tile Game Asset Pack</h1>
+  <button class="catbtn" onclick="regenAll()">Regenerate All</button>
+  <label style="margin-left:14px;font-size:12px;color:#9ab">
+    Palette Hue Lock
+    <input type="range" min="0" max="360" value="0" id="hueSlider" oninput="setHueShift(this.value)" style="vertical-align:middle">
+    <span id="hueVal">0°</span>
+  </label>
+</header>
+<section>
+  <h2>Characters</h2>
+  <div class="row" id="characters"></div>
+  <h2>Tiles</h2>
+  <div class="row" id="tiles"></div>
+  <h2>Props</h2>
+  <div class="row" id="props"></div>
+  <h2>UI / Effects</h2>
+  <div class="row" id="effects"></div>
+</section>
+<script>
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+function rint(rng,a,b){return a+Math.floor(rng()*(b-a+1));}
+
+let hueShift = 0;
+function rhue(rng,a,b){ return shue(rint(rng,a,b)); }
+function shue(h){ return ((h%360)+360+hueShift)%360; }
+function setHueShift(v){ hueShift = Number(v); document.getElementById('hueVal').textContent = v+'°'; regenAll(); }
+
+function makeCard(container, label, size, drawFn){
+  const card = document.createElement('div'); card.className='card';
+  const canvas = document.createElement('canvas'); canvas.width=size; canvas.height=size;
+  const ctx = canvas.getContext('2d');
+  let seed = Math.floor(Math.random()*1e9);
+  function render(){ const rng = mulberry32(seed); ctx.clearRect(0,0,size,size); drawFn(ctx, rng, size); }
+  render();
+  const name = document.createElement('div'); name.textContent=label; name.style.fontSize='12px'; name.style.marginBottom='6px';
+  const rBtn = document.createElement('button'); rBtn.textContent='↻'; rBtn.onclick=()=>{seed=Math.floor(Math.random()*1e9);render();};
+  const dBtn = document.createElement('button'); dBtn.textContent='⬇';
+  dBtn.onclick=()=>{ const a=document.createElement('a'); a.href=canvas.toDataURL('image/png'); a.download=label.toLowerCase().replace(/\s+/g,'_')+'.png'; a.click(); };
+  card.appendChild(canvas); card.appendChild(name); card.appendChild(rBtn); card.appendChild(dBtn);
+  container.appendChild(card);
+  return render;
+}
+const renderers = [];
+function addAsset(id,label,size,fn){ renderers.push(makeCard(document.getElementById(id),label,size,fn)); }
+function regenAll(){ renderers.forEach(r=>r()); }
+
+// ---------- CHARACTERS (top-down) ----------
+function drawTopDownHero(ctx, rng, s){
+  const shirt = `hsl(${rhue(rng,0,360)},60%,45%)`;
+  ctx.fillStyle='rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(s*0.5,s*0.84,s*0.2,s*0.05,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = shirt; ctx.fillRect(s*0.32,s*0.45,s*0.36,s*0.35);
+  ctx.fillStyle='rgba(0,0,0,0.15)'; ctx.fillRect(s*0.32,s*0.7,s*0.36,s*0.1);
+  ctx.fillStyle = '#e0b98a'; ctx.beginPath(); ctx.arc(s*0.5,s*0.35,s*0.16,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = '#333'; ctx.fillRect(s*0.34,s*0.28,s*0.32,s*0.06);
+  // backpack strap + hands for a bit more silhouette read
+  ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(s*0.38,s*0.47); ctx.lineTo(s*0.42,s*0.72); ctx.moveTo(s*0.62,s*0.47); ctx.lineTo(s*0.58,s*0.72); ctx.stroke();
+  ctx.fillStyle='#e0b98a';
+  ctx.beginPath(); ctx.arc(s*0.28,s*0.62,s*0.05,0,Math.PI*2); ctx.arc(s*0.72,s*0.62,s*0.05,0,Math.PI*2); ctx.fill();
+}
+function drawVillager(ctx, rng, s){
+  const cloak = `hsl(${rhue(rng,180,260)},35%,${rint(rng,30,45)}%)`;
+  ctx.fillStyle='rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(s*0.5,s*0.87,s*0.2,s*0.05,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = cloak; ctx.beginPath(); ctx.moveTo(s*0.5,s*0.42); ctx.lineTo(s*0.28,s*0.85); ctx.lineTo(s*0.72,s*0.85); ctx.closePath(); ctx.fill();
+  // cloak fold shading + trim, and a hood/collar
+  ctx.strokeStyle='rgba(0,0,0,0.25)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(s*0.5,s*0.44); ctx.lineTo(s*0.42,s*0.83); ctx.moveTo(s*0.5,s*0.44); ctx.lineTo(s*0.58,s*0.83); ctx.stroke();
+  ctx.fillStyle=`hsl(${rhue(rng,30,50)},50%,60%)`; ctx.fillRect(s*0.35,s*0.8,s*0.3,s*0.05);
+  ctx.fillStyle = '#e0b98a'; ctx.beginPath(); ctx.arc(s*0.5,s*0.35,s*0.15,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = cloak; ctx.beginPath(); ctx.arc(s*0.5,s*0.28,s*0.16,Math.PI,0); ctx.fill();
+}
+function drawCritter(ctx, rng, s){
+  const hue = rhue(rng,20,50);
+  ctx.fillStyle='rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.ellipse(s*0.55,s*0.68,s*0.24,s*0.06,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = `hsl(${hue},50%,45%)`;
+  ctx.beginPath(); ctx.ellipse(s*0.5,s*0.55,s*0.22,s*0.16,0,0,Math.PI*2); ctx.fill();
+  // stripes/spots pattern for variety + ears + tail
+  ctx.fillStyle = `hsl(${hue},50%,30%)`;
+  for(let i=0;i<3;i++) ctx.fillRect(s*(0.36+i*0.1), s*0.44, s*0.03, s*0.2);
+  ctx.beginPath(); ctx.ellipse(s*0.26,s*0.58,s*0.06,s*0.03,0.4,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = `hsl(${hue},50%,55%)`;
+  ctx.beginPath(); ctx.arc(s*0.72,s*0.5,s*0.1,0,Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(s*0.68,s*0.42); ctx.lineTo(s*0.65,s*0.32); ctx.lineTo(s*0.72,s*0.4); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(s*0.78,s*0.42); ctx.lineTo(s*0.82,s*0.32); ctx.lineTo(s*0.78,s*0.4); ctx.closePath(); ctx.fill();
+  ctx.fillStyle='#111'; ctx.beginPath(); ctx.arc(s*0.75,s*0.47,s*0.02,0,Math.PI*2); ctx.fill();
+}
+function drawHostileMob(ctx, rng, s){
+  const hue = rhue(rng,260,320);
+  ctx.fillStyle='rgba(0,0,0,0.2)'; ctx.beginPath(); ctx.ellipse(s*0.5,s*0.84,s*0.2,s*0.05,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = `hsl(${hue},50%,30%)`;
+  ctx.beginPath(); ctx.ellipse(s*0.5,s*0.55,s*0.2,s*0.22,0,0,Math.PI*2); ctx.fill();
+  // jagged spine ridge for a menacing silhouette
+  ctx.fillStyle=`hsl(${hue},50%,20%)`;
+  for(let i=0;i<4;i++){
+    const y = s*(0.35+i*0.1);
+    ctx.beginPath(); ctx.moveTo(s*0.5-s*0.03,y); ctx.lineTo(s*0.5,y-s*0.06); ctx.lineTo(s*0.5+s*0.03,y); ctx.closePath(); ctx.fill();
+  }
+  ctx.fillStyle='#f33'; ctx.beginPath(); ctx.arc(s*0.42,s*0.5,s*0.03,0,Math.PI*2); ctx.arc(s*0.58,s*0.5,s*0.03,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=`hsl(${hue},50%,20%)`;
+  ctx.beginPath(); ctx.moveTo(s*0.36,s*0.62); ctx.lineTo(s*0.42,s*0.68); ctx.lineTo(s*0.34,s*0.7); ctx.closePath(); ctx.fill();
+  ctx.beginPath(); ctx.moveTo(s*0.64,s*0.62); ctx.lineTo(s*0.58,s*0.68); ctx.lineTo(s*0.66,s*0.7); ctx.closePath(); ctx.fill();
+}
+addAsset('characters','Player',64,drawTopDownHero);
+addAsset('characters','Villager NPC',64,drawVillager);
+addAsset('characters','Critter',64,drawCritter);
+addAsset('characters','Hostile Mob',64,drawHostileMob);
+
+// ---------- TILES ----------
+function drawBiomeTile(hueRange,sat,light){
+  return function(ctx, rng, s){
+    const hue = rhue(rng,hueRange[0],hueRange[1]);
+    ctx.fillStyle = `hsl(${hue},${sat}%,${light}%)`;
+    ctx.fillRect(0,0,s,s);
+    // two-tone patchiness for organic variation, then fine speckle on top
+    ctx.fillStyle = `hsl(${hue},${sat}%,${light+6}%)`;
+    for(let i=0;i<3;i++) ctx.beginPath(), ctx.arc(rng()*s,rng()*s,s*0.15+rng()*s*0.1,0,Math.PI*2), ctx.fill();
+    ctx.fillStyle = 'rgba(0,0,0,0.08)';
+    for(let i=0;i<8;i++) ctx.fillRect(rng()*s,rng()*s,3,3);
+    ctx.strokeStyle='rgba(0,0,0,0.06)'; ctx.strokeRect(0,0,s,s);
+  }
+}
+function drawWaterTile(ctx, rng, s){
+  ctx.fillStyle = `hsl(${rhue(rng,200,220)},55%,35%)`; ctx.fillRect(0,0,s,s);
+  // depth gradient + ripple highlights + sparkle glints
+  const grad = ctx.createLinearGradient(0,0,0,s);
+  grad.addColorStop(0,'rgba(255,255,255,0.12)'); grad.addColorStop(1,'rgba(0,0,0,0.15)');
+  ctx.fillStyle = grad; ctx.fillRect(0,0,s,s);
+  ctx.strokeStyle='rgba(255,255,255,0.25)';
+  for(let i=0;i<3;i++){ const y=rng()*s; ctx.beginPath(); ctx.moveTo(0,y); ctx.quadraticCurveTo(s*0.5,y+6,s,y); ctx.stroke(); }
+  ctx.fillStyle='rgba(255,255,255,0.5)';
+  for(let i=0;i<3;i++) ctx.fillRect(rng()*s,rng()*s,2,2);
+}
+function drawRoadTile(ctx, rng, s){
+  ctx.fillStyle = `hsl(${rhue(rng,30,40)},20%,${rint(rng,45,55)}%)`; ctx.fillRect(0,0,s,s);
+  // packed-dirt path texture + worn edge blending into surrounding grass
+  ctx.fillStyle='rgba(0,0,0,0.1)';
+  for(let i=0;i<10;i++) ctx.fillRect(rng()*s,rng()*s,3,3);
+  ctx.fillStyle=`hsl(${rhue(rng,90,120)},35%,32%)`;
+  for(let i=0;i<6;i++) ctx.fillRect(rng()*s, rng()>0.5?rng()*s*0.15:s-rng()*s*0.15, 4,4);
+  ctx.strokeStyle='rgba(255,255,255,0.15)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(0,s*0.5); ctx.lineTo(s,s*0.5); ctx.stroke();
+}
+addAsset('tiles','Grass',48,drawBiomeTile([90,120],40,32));
+addAsset('tiles','Sand',48,drawBiomeTile([40,50],45,65));
+addAsset('tiles','Forest',48,drawBiomeTile([110,140],45,20));
+addAsset('tiles','Water',48,drawWaterTile);
+addAsset('tiles','Road',48,drawRoadTile);
+
+// ---------- PROPS ----------
+function drawTreeProp(ctx, rng, s){
+  ctx.fillStyle='rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.ellipse(s*0.5,s*0.9,s*0.2,s*0.05,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='#4a301a'; ctx.fillRect(s*0.46,s*0.55,s*0.08,s*0.35);
+  ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.strokeRect(s*0.46,s*0.55,s*0.08,s*0.35);
+  const hue = rhue(rng,100,140);
+  ctx.fillStyle = `hsl(${hue},45%,${rint(rng,20,32)}%)`;
+  ctx.beginPath(); ctx.arc(s*0.5,s*0.4,s*0.3,0,Math.PI*2); ctx.fill();
+  // layered canopy clumps + top highlight for volume
+  ctx.fillStyle = `hsl(${hue},45%,${rint(rng,28,38)}%)`;
+  ctx.beginPath(); ctx.arc(s*0.33,s*0.48,s*0.15,0,Math.PI*2); ctx.arc(s*0.67,s*0.48,s*0.15,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.15)';
+  ctx.beginPath(); ctx.arc(s*0.42,s*0.28,s*0.09,0,Math.PI*2); ctx.fill();
+}
+function drawRock(ctx, rng, s){
+  ctx.fillStyle='rgba(0,0,0,0.12)'; ctx.beginPath(); ctx.ellipse(s*0.5,s*0.7,s*0.28,s*0.06,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = `hsl(${rhue(rng,200,220)},8%,${rint(rng,40,55)}%)`;
+  ctx.beginPath(); ctx.ellipse(s*0.5,s*0.55,s*0.28,s*0.18,0,0,Math.PI*2); ctx.fill();
+  // crack lines + highlight facet for surface detail
+  ctx.strokeStyle='rgba(0,0,0,0.25)'; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.moveTo(s*0.4,s*0.48); ctx.lineTo(s*0.55,s*0.6); ctx.moveTo(s*0.55,s*0.6); ctx.lineTo(s*0.48,s*0.68); ctx.stroke();
+  ctx.fillStyle='rgba(255,255,255,0.2)';
+  ctx.beginPath(); ctx.ellipse(s*0.4,s*0.46,s*0.08,s*0.04,0,0,Math.PI*2); ctx.fill();
+}
+function drawFlower(ctx, rng, s){
+  const hue = rhue(rng,0,360);
+  ctx.fillStyle='#2f6b2f'; ctx.fillRect(s*0.48,s*0.5,s*0.04,s*0.3);
+  // small leaf on the stem for extra silhouette detail
+  ctx.beginPath(); ctx.ellipse(s*0.42,s*0.65,s*0.06,s*0.03,0.5,0,Math.PI*2); ctx.fill();
+  const n = 5;
+  ctx.fillStyle = `hsl(${hue},70%,65%)`;
+  for(let i=0;i<n;i++){
+    const a = (i/n)*Math.PI*2;
+    ctx.beginPath(); ctx.ellipse(s*0.5+Math.cos(a)*s*0.1, s*0.45+Math.sin(a)*s*0.1, s*0.07, s*0.045, a, 0, Math.PI*2); ctx.fill();
+  }
+  ctx.fillStyle='#fff8c0'; ctx.beginPath(); ctx.arc(s*0.5,s*0.45,s*0.05,0,Math.PI*2); ctx.fill();
+}
+function drawHouse(ctx, rng, s){
+  const wallHue = rhue(rng,20,45);
+  const roofHue = rhue(rng,0,20);
+  ctx.fillStyle='rgba(0,0,0,0.15)'; ctx.beginPath(); ctx.ellipse(s*0.5,s*0.92,s*0.32,s*0.05,0,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=`hsl(${wallHue},35%,${rint(rng,55,68)}%)`;
+  ctx.fillRect(s*0.2,s*0.5,s*0.6,s*0.4);
+  ctx.strokeStyle='rgba(0,0,0,0.2)'; ctx.strokeRect(s*0.2,s*0.5,s*0.6,s*0.4);
+  ctx.fillStyle=`hsl(${roofHue},50%,${rint(rng,35,45)}%)`;
+  ctx.beginPath(); ctx.moveTo(s*0.14,s*0.5); ctx.lineTo(s*0.5,s*0.2); ctx.lineTo(s*0.86,s*0.5); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle=`hsl(${roofHue},50%,25%)`; ctx.stroke();
+  ctx.fillStyle=`hsl(${wallHue},30%,40%)`;
+  ctx.fillRect(s*0.44,s*0.68,s*0.12,s*0.22);
+  ctx.fillStyle=`hsl(${rhue(rng,180,220)},60%,70%)`;
+  ctx.fillRect(s*0.26,s*0.58,s*0.1,s*0.1); ctx.fillRect(s*0.64,s*0.58,s*0.1,s*0.1);
+  ctx.fillStyle=`hsl(${roofHue},40%,30%)`;
+  ctx.fillRect(s*0.68,s*0.24,s*0.05,s*0.14);
+}
+addAsset('props','Tree',56,drawTreeProp);
+addAsset('props','Rock',56,drawRock);
+addAsset('props','Flower',56,drawFlower);
+addAsset('props','House',64,drawHouse);
+
+// ---------- UI / EFFECTS ----------
+function drawHeart(ctx, rng, s){
+  ctx.strokeStyle='#7a1a15'; ctx.lineWidth=1.5;
+  ctx.fillStyle='#e0453f';
+  ctx.beginPath();
+  ctx.moveTo(s*0.5,s*0.82);
+  ctx.bezierCurveTo(s*0.1,s*0.5,s*0.2,s*0.15,s*0.5,s*0.32);
+  ctx.bezierCurveTo(s*0.8,s*0.15,s*0.9,s*0.5,s*0.5,s*0.82);
+  ctx.fill(); ctx.stroke();
+  // glossy highlight for a polished HUD icon look
+  ctx.fillStyle='rgba(255,255,255,0.4)';
+  ctx.beginPath(); ctx.ellipse(s*0.36,s*0.35,s*0.07,s*0.1,-0.4,0,Math.PI*2); ctx.fill();
+}
+function drawCursor(ctx, rng, s){
+  const hue = rhue(rng,40,60);
+  ctx.strokeStyle=`hsl(${hue},90%,60%)`; ctx.lineWidth=3;
+  ctx.strokeRect(s*0.2,s*0.2,s*0.6,s*0.6);
+  ctx.lineWidth=1;
+  for(const [x,y] of [[0.2,0.2],[0.8,0.2],[0.2,0.8],[0.8,0.8]]){
+    ctx.fillStyle='#fff'; ctx.fillRect(s*x-2,s*y-2,4,4);
+  }
+  // animated-style pulsing inner glow ring + tick marks on edges
+  ctx.strokeStyle=`hsla(${hue},90%,70%,0.5)`; ctx.lineWidth=1;
+  ctx.strokeRect(s*0.26,s*0.26,s*0.48,s*0.48);
+  ctx.strokeStyle=`hsl(${hue},90%,60%)`;
+  ctx.beginPath(); ctx.moveTo(s*0.5,s*0.2); ctx.lineTo(s*0.5,s*0.28); ctx.moveTo(s*0.5,s*0.72); ctx.lineTo(s*0.5,s*0.8); ctx.stroke();
+}
+function drawSparkle(ctx, rng, s){
+  const hue = rhue(rng,180,220);
+  ctx.fillStyle=`hsl(${hue},80%,70%)`;
+  for(let i=0;i<5;i++){
+    const x=s*0.5+(rng()-0.5)*s*0.6, y=s*0.5+(rng()-0.5)*s*0.6, r=2+rng()*4;
+    ctx.beginPath(); ctx.arc(x,y,r,0,Math.PI*2); ctx.fill();
+    // 4-point star glint on the largest sparkle
+    if(r>3.5){
+      ctx.strokeStyle=`hsla(${hue},90%,85%,0.8)`; ctx.lineWidth=1;
+      ctx.beginPath(); ctx.moveTo(x-r*2,y); ctx.lineTo(x+r*2,y); ctx.moveTo(x,y-r*2); ctx.lineTo(x,y+r*2); ctx.stroke();
+    }
+  }
+}
+addAsset('effects','Heart (HP)',48,drawHeart);
+addAsset('effects','Selection Cursor',48,drawCursor);
+addAsset('effects','Sparkle',48,drawSparkle);
+</script>
+</body>
+</html>

@@ -1,0 +1,337 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Space Sim Asset Pack</title>
+<style>
+  body{margin:0;background:#0a0a12;color:#eee;font-family:sans-serif}
+  header{position:sticky;top:0;background:#141420;padding:14px 20px;border-bottom:1px solid #333;z-index:5}
+  h1{font-size:18px;margin:0 0 6px}
+  section{padding:20px}
+  h2{font-size:15px;color:#9ab;text-transform:uppercase;letter-spacing:1px;margin:0 0 12px}
+  .row{display:flex;flex-wrap:wrap;gap:14px;margin-bottom:30px}
+  .card{background:#141420;border:1px solid #2c2c42;border-radius:8px;padding:10px;text-align:center;width:130px}
+  canvas{background:#000;border-radius:4px;display:block;margin:0 auto 8px}
+  button{background:#2b3550;color:#fff;border:1px solid #4a5a8a;padding:5px 10px;border-radius:5px;cursor:pointer;font-size:11px;margin:2px}
+  button:hover{background:#3a4770}
+  .catbtn{font-size:13px;padding:7px 14px}
+</style>
+</head>
+<body>
+<header>
+  <h1>Space Sim Asset Pack</h1>
+  <button class="catbtn" onclick="regenAll()">Regenerate All</button>
+  <label style="margin-left:14px;font-size:12px;color:#9ab">
+    Palette Hue Lock
+    <input type="range" min="0" max="360" value="0" id="hueSlider" oninput="setHueShift(this.value)" style="vertical-align:middle">
+    <span id="hueVal">0°</span>
+  </label>
+</header>
+<section>
+  <h2>Ships</h2>
+  <div class="row" id="characters"></div>
+  <h2>Planets / Environment</h2>
+  <div class="row" id="tiles"></div>
+  <h2>Props</h2>
+  <div class="row" id="props"></div>
+  <h2>Effects</h2>
+  <div class="row" id="effects"></div>
+</section>
+<script>
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;}}
+function rint(rng,a,b){return a+Math.floor(rng()*(b-a+1));}
+
+let hueShift = 0;
+function rhue(rng,a,b){ return shue(rint(rng,a,b)); }
+function shue(h){ return ((h%360)+360+hueShift)%360; }
+function setHueShift(v){ hueShift = Number(v); document.getElementById('hueVal').textContent = v+'°'; regenAll(); }
+
+function makeCard(container, label, size, drawFn){
+  const card = document.createElement('div'); card.className='card';
+  const canvas = document.createElement('canvas'); canvas.width=size; canvas.height=size;
+  const ctx = canvas.getContext('2d');
+  let seed = Math.floor(Math.random()*1e9);
+  function render(){ const rng = mulberry32(seed); ctx.clearRect(0,0,size,size); drawFn(ctx, rng, size); }
+  render();
+  const name = document.createElement('div'); name.textContent=label; name.style.fontSize='12px'; name.style.marginBottom='6px';
+  const rBtn = document.createElement('button'); rBtn.textContent='↻'; rBtn.onclick=()=>{seed=Math.floor(Math.random()*1e9);render();};
+  const dBtn = document.createElement('button'); dBtn.textContent='⬇';
+  dBtn.onclick=()=>{ const a=document.createElement('a'); a.href=canvas.toDataURL('image/png'); a.download=label.toLowerCase().replace(/\s+/g,'_')+'.png'; a.click(); };
+  card.appendChild(canvas); card.appendChild(name); card.appendChild(rBtn); card.appendChild(dBtn);
+  container.appendChild(card);
+  return render;
+}
+const renderers = [];
+function addAsset(id,label,size,fn){ renderers.push(makeCard(document.getElementById(id),label,size,fn)); }
+function regenAll(){ renderers.forEach(r=>r()); }
+
+// ---------- SHIPS ----------
+function drawFighter(ctx, rng, s){
+  const hue = rhue(rng,190,230);
+  ctx.save(); ctx.translate(s*0.5,s*0.5);
+  ctx.fillStyle = `hsl(${hue},50%,60%)`;
+  ctx.beginPath(); ctx.moveTo(0,-s*0.35); ctx.lineTo(s*0.25,s*0.3); ctx.lineTo(0,s*0.15); ctx.lineTo(-s*0.25,s*0.3); ctx.closePath(); ctx.fill();
+  // wing stripes + panel line detailing
+  ctx.strokeStyle=`hsl(${hue},50%,35%)`; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(0,-s*0.1); ctx.lineTo(s*0.18,s*0.2); ctx.moveTo(0,-s*0.1); ctx.lineTo(-s*0.18,s*0.2); ctx.stroke();
+  ctx.fillStyle=`hsl(${(hue+40)%360},80%,55%)`;
+  ctx.fillRect(-s*0.22,s*0.15,s*0.06,s*0.1); ctx.fillRect(s*0.16,s*0.15,s*0.06,s*0.1);
+  ctx.fillStyle = `hsl(${(hue+180)%360},80%,60%)`;
+  ctx.beginPath(); ctx.ellipse(0,-s*0.05,s*0.06,s*0.12,0,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle=`hsl(${(hue+180)%360},80%,30%)`; ctx.lineWidth=1; ctx.stroke();
+  ctx.restore();
+}
+function drawCargoShip(ctx, rng, s){
+  const hue = rhue(rng,20,50);
+  ctx.save(); ctx.translate(s*0.5,s*0.5);
+  ctx.fillStyle=`hsl(${hue},30%,45%)`;
+  ctx.fillRect(-s*0.3,-s*0.15,s*0.6,s*0.3);
+  // cargo pod segmentation + rivets/hazard stripe for industrial detail
+  ctx.strokeStyle='rgba(0,0,0,0.35)'; ctx.lineWidth=1.5;
+  for(let x=-0.2;x<=0.2;x+=0.2) ctx.strokeRect(s*x-2, -s*0.15, s*0.02, s*0.3);
+  ctx.fillStyle=`hsl(${(hue+30)%360},80%,55%)`;
+  ctx.fillRect(-s*0.3,-s*0.02,s*0.6,s*0.03);
+  ctx.fillStyle=`hsl(${hue},30%,35%)`;
+  ctx.fillRect(-s*0.35,-s*0.06,s*0.14,s*0.12); ctx.fillRect(s*0.21,-s*0.06,s*0.14,s*0.12);
+  ctx.fillStyle=`hsl(${(hue+180)%360},70%,55%)`;
+  ctx.beginPath(); ctx.arc(-s*0.28,0,s*0.02,0,Math.PI*2); ctx.arc(s*0.28,0,s*0.02,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+function drawScoutDrone(ctx, rng, s){
+  const hue = rhue(rng,80,140);
+  ctx.save(); ctx.translate(s*0.5,s*0.5);
+  ctx.strokeStyle = `hsl(${hue},60%,60%)`; ctx.lineWidth=3;
+  ctx.beginPath(); ctx.arc(0,0,s*0.22,0,Math.PI*2); ctx.stroke();
+  // secondary inner ring + antenna for a more mechanical look
+  ctx.strokeStyle=`hsl(${hue},60%,40%)`; ctx.lineWidth=1;
+  ctx.beginPath(); ctx.arc(0,0,s*0.16,0,Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(0,-s*0.22); ctx.lineTo(0,-s*0.32); ctx.stroke();
+  ctx.fillStyle=`hsl(${(hue+180)%360},80%,60%)`; ctx.beginPath(); ctx.arc(0,-s*0.32,s*0.02,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle = `hsl(${hue},60%,50%)`;
+  ctx.beginPath(); ctx.arc(0,0,s*0.1,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=`hsl(${(hue+180)%360},70%,55%)`; ctx.beginPath(); ctx.arc(0,0,s*0.04,0,Math.PI*2); ctx.fill();
+  for(let a=0;a<4;a++){
+    ctx.save(); ctx.rotate(a*Math.PI/2);
+    ctx.fillStyle=`hsl(${hue},60%,40%)`; ctx.fillRect(s*0.18,-2,s*0.12,4);
+    ctx.fillStyle=`hsl(${hue},60%,55%)`; ctx.beginPath(); ctx.arc(s*0.3,0,s*0.02,0,Math.PI*2); ctx.fill();
+    ctx.restore();
+  }
+  ctx.restore();
+}
+addAsset('characters','Fighter',80,drawFighter);
+addAsset('characters','Cargo Ship',80,drawCargoShip);
+addAsset('characters','Scout Drone',80,drawScoutDrone);
+
+// ---------- PLANETS ----------
+function drawPlanet(ctx, rng, s){
+  const hues=[200,20,140,280,40,320];
+  const h = shue(hues[rint(rng,0,hues.length-1)]);
+  const cx=s*0.5, cy=s*0.5, r=s*0.35;
+  const grad = ctx.createRadialGradient(cx-r*0.3,cy-r*0.3,r*0.1,cx,cy,r);
+  grad.addColorStop(0,`hsl(${h},55%,55%)`); grad.addColorStop(0.6,`hsl(${h},55%,35%)`); grad.addColorStop(1,`hsl(${h},55%,18%)`);
+  const hasRing = rng()>0.5;
+  if(hasRing){
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(-0.3); ctx.scale(1,0.35);
+    ctx.strokeStyle=`hsla(${(h+40)%360},40%,70%,0.5)`; ctx.lineWidth=r*0.18;
+    ctx.beginPath(); ctx.arc(0,0,r*1.6,0,Math.PI*2); ctx.stroke(); ctx.restore();
+  }
+  ctx.beginPath(); ctx.fillStyle=grad; ctx.arc(cx,cy,r,0,Math.PI*2); ctx.fill();
+  // cloud-band swirls + craters clipped to the disc for surface detail
+  ctx.save(); ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.clip();
+  ctx.strokeStyle=`hsla(${h},40%,${rng()>0.5?70:20}%,0.3)`; ctx.lineWidth=r*0.1;
+  for(let i=0;i<3;i++){
+    const by = cy + (rng()-0.5)*r*1.4;
+    ctx.beginPath(); ctx.moveTo(cx-r,by); ctx.quadraticCurveTo(cx,by+r*0.3*(rng()-0.5),cx+r,by); ctx.stroke();
+  }
+  ctx.fillStyle='rgba(0,0,0,0.15)';
+  for(let i=0;i<5;i++) ctx.beginPath(), ctx.arc(cx+(rng()-0.5)*r*1.4, cy+(rng()-0.5)*r*1.4, r*0.06+rng()*r*0.06, 0, Math.PI*2), ctx.fill();
+  ctx.restore();
+  if(hasRing){
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(-0.3); ctx.scale(1,0.35);
+    ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.lineWidth=1;
+    ctx.beginPath(); ctx.arc(0,0,r*1.15,0,Math.PI*2); ctx.stroke(); ctx.restore();
+  }
+}
+function drawNebulaBg(ctx, rng, s){
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,s,s);
+  for(let i=0;i<5;i++){
+    const h = rhue(rng,180,320);
+    const grad = ctx.createRadialGradient(rng()*s,rng()*s,0,rng()*s,rng()*s,s*0.4);
+    grad.addColorStop(0,`hsla(${h},70%,50%,0.35)`); grad.addColorStop(1,'transparent');
+    ctx.fillStyle=grad; ctx.fillRect(0,0,s,s);
+  }
+  // wispy filament strands threading through the gas cloud
+  for(let i=0;i<4;i++){
+    const h = rhue(rng,180,320);
+    ctx.strokeStyle=`hsla(${h},80%,65%,0.25)`; ctx.lineWidth=1+rng()*2;
+    ctx.beginPath();
+    let x=rng()*s, y=rng()*s;
+    ctx.moveTo(x,y);
+    for(let j=0;j<4;j++){ x+=(rng()-0.5)*s*0.4; y+=(rng()-0.5)*s*0.4; ctx.lineTo(x,y); }
+    ctx.stroke();
+  }
+  ctx.fillStyle='#fff';
+  for(let i=0;i<40;i++) ctx.fillRect(rng()*s,rng()*s,1,1);
+  // a few brighter twinkling stars with cross-glint
+  for(let i=0;i<4;i++){
+    const x=rng()*s, y=rng()*s;
+    ctx.fillStyle='rgba(255,255,255,0.9)'; ctx.beginPath(); ctx.arc(x,y,1.5,0,Math.PI*2); ctx.fill();
+    ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.lineWidth=0.5;
+    ctx.beginPath(); ctx.moveTo(x-4,y); ctx.lineTo(x+4,y); ctx.moveTo(x,y-4); ctx.lineTo(x,y+4); ctx.stroke();
+  }
+}
+addAsset('tiles','Planet',80,drawPlanet);
+addAsset('tiles','Nebula Backdrop',96,drawNebulaBg);
+
+// ---------- PROPS ----------
+function drawAsteroid(ctx, rng, s){
+  ctx.fillStyle='#8a7d6f';
+  ctx.beginPath();
+  const n=7;
+  const verts=[];
+  for(let i=0;i<n;i++){
+    const a=(i/n)*Math.PI*2, r=s*0.3*(0.6+rng()*0.5);
+    const px=s*0.5+Math.cos(a)*r, py=s*0.5+Math.sin(a)*r;
+    verts.push([px,py]);
+    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  }
+  ctx.closePath(); ctx.fill();
+  ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.stroke();
+  // impact craters + a lit facet edge for dimensionality
+  ctx.fillStyle='rgba(0,0,0,0.2)';
+  for(let i=0;i<3;i++) ctx.beginPath(), ctx.arc(s*0.5+(rng()-0.5)*s*0.3, s*0.5+(rng()-0.5)*s*0.3, s*0.03+rng()*s*0.04, 0, Math.PI*2), ctx.fill();
+  ctx.fillStyle='rgba(255,255,255,0.15)';
+  ctx.beginPath(); ctx.moveTo(verts[0][0],verts[0][1]); ctx.lineTo(verts[1][0],verts[1][1]); ctx.lineTo(s*0.5,s*0.5); ctx.closePath(); ctx.fill();
+}
+function drawSpaceStation(ctx, rng, s){
+  ctx.save(); ctx.translate(s*0.5,s*0.5);
+  ctx.fillStyle='#888';
+  ctx.beginPath(); ctx.arc(0,0,s*0.14,0,Math.PI*2); ctx.fill();
+  ctx.strokeStyle='#aaa'; ctx.lineWidth=4;
+  ctx.beginPath(); ctx.arc(0,0,s*0.32,0,Math.PI*2); ctx.stroke();
+  for(let a=0;a<4;a++){ ctx.save(); ctx.rotate(a*Math.PI/2); ctx.fillStyle='#666'; ctx.fillRect(-2,-s*0.32,4,s*0.18); ctx.restore(); }
+  // outer docking ring + solar panel arrays for a busier silhouette
+  ctx.strokeStyle='#555'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(0,0,s*0.4,0,Math.PI*2); ctx.stroke();
+  ctx.fillStyle=`hsl(${rhue(rng,200,230)},60%,35%)`;
+  ctx.save(); ctx.rotate(Math.PI/4); ctx.fillRect(-s*0.02,-s*0.5,s*0.04,s*0.16); ctx.fillRect(-s*0.02,s*0.34,s*0.04,s*0.16); ctx.restore();
+  ctx.strokeStyle='rgba(255,255,255,0.3)'; ctx.lineWidth=0.5;
+  ctx.save(); ctx.rotate(Math.PI/4);
+  for(let i=1;i<3;i++){ ctx.beginPath(); ctx.moveTo(-s*0.02,-s*0.5+i*s*0.05); ctx.lineTo(s*0.02,-s*0.5+i*s*0.05); ctx.stroke(); }
+  ctx.restore();
+  ctx.fillStyle=`hsl(${rhue(rng,180,220)},80%,60%)`;
+  ctx.beginPath(); ctx.arc(0,0,s*0.05,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+function drawWreckage(ctx, rng, s){
+  ctx.save(); ctx.translate(s*0.5,s*0.5); ctx.rotate(rng()*Math.PI*2);
+  const hue = rhue(rng,0,40);
+  // broken hull chunks scattered around a central fragment
+  for(let i=0;i<4;i++){
+    const a = rng()*Math.PI*2, r = rng()*s*0.28;
+    ctx.save(); ctx.translate(Math.cos(a)*r, Math.sin(a)*r); ctx.rotate(rng()*Math.PI*2);
+    ctx.fillStyle = `hsl(${hue},15%,${rint(rng,25,40)}%)`;
+    ctx.beginPath(); ctx.moveTo(-s*0.08,-s*0.05); ctx.lineTo(s*0.08,-s*0.06); ctx.lineTo(s*0.05,s*0.07); ctx.lineTo(-s*0.06,s*0.05); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba(0,0,0,0.3)'; ctx.stroke();
+    ctx.restore();
+  }
+  // scorch marks + a lone flickering ember light
+  ctx.fillStyle='rgba(0,0,0,0.3)';
+  ctx.beginPath(); ctx.arc(0,0,s*0.1,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle=`hsla(${rhue(rng,10,30)},90%,55%,0.7)`;
+  ctx.beginPath(); ctx.arc(s*0.05,-s*0.03,s*0.02,0,Math.PI*2); ctx.fill();
+  ctx.restore();
+}
+addAsset('props','Asteroid',56,drawAsteroid);
+addAsset('props','Space Station',80,drawSpaceStation);
+addAsset('props','Wreckage',64,drawWreckage);
+
+// ---------- EFFECTS ----------
+function drawEngineGlow(ctx, rng, s){
+  const grad = ctx.createRadialGradient(s*0.5,s*0.5,1,s*0.5,s*0.5,s*0.4);
+  grad.addColorStop(0,'rgba(255,180,80,0.9)'); grad.addColorStop(1,'rgba(255,180,80,0)');
+  ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(s*0.5,s*0.5,s*0.4,0,Math.PI*2); ctx.fill();
+  // hot inner core + scattered ember sparks for a livelier flame
+  const core = ctx.createRadialGradient(s*0.5,s*0.5,0,s*0.5,s*0.5,s*0.15);
+  core.addColorStop(0,'rgba(255,255,255,0.95)'); core.addColorStop(1,'rgba(255,255,255,0)');
+  ctx.fillStyle=core; ctx.beginPath(); ctx.arc(s*0.5,s*0.5,s*0.15,0,Math.PI*2); ctx.fill();
+  ctx.fillStyle='rgba(255,220,150,0.8)';
+  for(let i=0;i<5;i++){
+    const a=rng()*Math.PI*2, r=s*0.2+rng()*s*0.15;
+    ctx.beginPath(); ctx.arc(s*0.5+Math.cos(a)*r, s*0.5+Math.sin(a)*r, 1+rng()*1.5, 0, Math.PI*2); ctx.fill();
+  }
+}
+function drawLaser(ctx, rng, s){
+  const hue = rhue(rng,0,360);
+  ctx.strokeStyle = `hsl(${hue},100%,60%)`; ctx.lineWidth=4; ctx.lineCap='round';
+  ctx.shadowColor = `hsl(${hue},100%,60%)`; ctx.shadowBlur=8;
+  ctx.beginPath(); ctx.moveTo(s*0.5,s*0.1); ctx.lineTo(s*0.5,s*0.9); ctx.stroke();
+  // bright white core beam + impact flare at the tip
+  ctx.shadowBlur=0; ctx.strokeStyle='rgba(255,255,255,0.9)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.moveTo(s*0.5,s*0.15); ctx.lineTo(s*0.5,s*0.85); ctx.stroke();
+  ctx.fillStyle=`hsla(${hue},100%,70%,0.8)`;
+  ctx.beginPath(); ctx.arc(s*0.5,s*0.1,s*0.06,0,Math.PI*2); ctx.fill();
+}
+function drawExplosion(ctx, rng, s){
+  for(let i=0;i<3;i++){
+    const grad = ctx.createRadialGradient(s*0.5,s*0.5,0,s*0.5,s*0.5,s*0.4*(1-i*0.25));
+    grad.addColorStop(0, i===0?'#fff':(i===1?'#ffcf5a':'#ff5a3a'));
+    grad.addColorStop(1,'transparent');
+    ctx.fillStyle=grad; ctx.beginPath(); ctx.arc(s*0.5,s*0.5,s*0.4*(1-i*0.25),0,Math.PI*2); ctx.fill();
+  }
+  // jagged shockwave ring + flying debris chunks
+  ctx.strokeStyle='rgba(255,200,120,0.6)'; ctx.lineWidth=2;
+  ctx.beginPath();
+  const n=10;
+  for(let i=0;i<=n;i++){
+    const a=(i/n)*Math.PI*2, r=s*0.42*(0.9+rng()*0.2);
+    const px=s*0.5+Math.cos(a)*r, py=s*0.5+Math.sin(a)*r;
+    if(i===0) ctx.moveTo(px,py); else ctx.lineTo(px,py);
+  }
+  ctx.stroke();
+  ctx.fillStyle='#555';
+  for(let i=0;i<4;i++){
+    const a=rng()*Math.PI*2, r=s*0.3+rng()*s*0.15;
+    ctx.fillRect(s*0.5+Math.cos(a)*r, s*0.5+Math.sin(a)*r, 2, 2);
+  }
+}
+function drawHudRadar(ctx, rng, s){
+  const cx=s*0.5, cy=s*0.5, r=s*0.4;
+  ctx.strokeStyle='rgba(80,220,140,0.6)'; ctx.lineWidth=1.5;
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx,cy,r*0.6,0,Math.PI*2); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(cx-r,cy); ctx.lineTo(cx+r,cy); ctx.moveTo(cx,cy-r); ctx.lineTo(cx,cy+r); ctx.stroke();
+  // sweep wedge
+  const sweep = rng()*Math.PI*2;
+  ctx.fillStyle='rgba(80,220,140,0.25)';
+  ctx.beginPath(); ctx.moveTo(cx,cy); ctx.arc(cx,cy,r,sweep,sweep+0.6); ctx.closePath(); ctx.fill();
+  // blips
+  ctx.fillStyle='#ff5a5a';
+  for(let i=0;i<3;i++){
+    const a=rng()*Math.PI*2, rr=rng()*r*0.9;
+    ctx.beginPath(); ctx.arc(cx+Math.cos(a)*rr, cy+Math.sin(a)*rr, 2.5, 0, Math.PI*2); ctx.fill();
+  }
+}
+function drawWormhole(ctx, rng, s){
+  const cx=s*0.5, cy=s*0.5, hue = rhue(rng,180,300);
+  ctx.fillStyle='#000'; ctx.fillRect(0,0,s,s);
+  for(let i=8;i>0;i--){
+    const r = s*0.42*(i/8);
+    ctx.strokeStyle = `hsla(${(hue+i*12)%360},90%,${60-i*3}%,${0.15+0.08*(8-i)})`;
+    ctx.lineWidth = s*0.03;
+    ctx.save(); ctx.translate(cx,cy); ctx.rotate(i*0.5+rng());
+    ctx.beginPath(); ctx.ellipse(0,0,r,r*0.4,0,0,Math.PI*1.7); ctx.stroke();
+    ctx.restore();
+  }
+  const core = ctx.createRadialGradient(cx,cy,0,cx,cy,s*0.12);
+  core.addColorStop(0,'#fff'); core.addColorStop(1,'transparent');
+  ctx.fillStyle=core; ctx.beginPath(); ctx.arc(cx,cy,s*0.12,0,Math.PI*2); ctx.fill();
+}
+addAsset('effects','Engine Glow',56,drawEngineGlow);
+addAsset('effects','Laser Bolt',56,drawLaser);
+addAsset('effects','Explosion',56,drawExplosion);
+addAsset('effects','HUD Radar',72,drawHudRadar);
+addAsset('effects','Wormhole',72,drawWormhole);
+</script>
+</body>
+</html>

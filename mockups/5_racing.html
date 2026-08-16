@@ -1,0 +1,225 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Racing Game Mockup</title>
+<style>
+  html,body{margin:0;padding:0;background:#0b0e14;color:#eee;font-family:sans-serif;overflow:hidden}
+  #ui{position:fixed;top:10px;left:10px;z-index:10}
+  button{background:#2b3550;color:#fff;border:1px solid #4a5a8a;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:14px}
+  button:hover{background:#3a4770}
+  canvas{display:block}
+</style>
+</head>
+<body>
+<div id="ui"><button onclick="regenerate()">Regenerate</button></div>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
+resize(); window.addEventListener('resize', ()=>{resize(); draw();});
+
+let seed = 555;
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+}
+
+let rand, trackPoints, scenery, hillPatches, cloudShadows;
+
+// generate a closed procedural loop track using a noisy radius around a circle
+function generateTrack(rng, cx, cy, baseR, points){
+  const pts = [];
+  const noiseSeeds = [];
+  for(let i=0;i<6;i++) noiseSeeds.push({amp: rng()*baseR*0.35, freq: 1+Math.floor(rng()*4), phase: rng()*Math.PI*2});
+  for(let i=0;i<points;i++){
+    const a = (i/points)*Math.PI*2;
+    let r = baseR;
+    for(const n of noiseSeeds){
+      r += Math.sin(a*n.freq + n.phase) * n.amp;
+    }
+    pts.push({x: cx + Math.cos(a)*r, y: cy + Math.sin(a)*r*0.55});
+  }
+  return pts;
+}
+
+function catmullRom(p0,p1,p2,p3,t){
+  const t2=t*t, t3=t2*t;
+  return {
+    x: 0.5*((2*p1.x)+(-p0.x+p2.x)*t+(2*p0.x-5*p1.x+4*p2.x-p3.x)*t2+(-p0.x+3*p1.x-3*p2.x+p3.x)*t3),
+    y: 0.5*((2*p1.y)+(-p0.y+p2.y)*t+(2*p0.y-5*p1.y+4*p2.y-p3.y)*t2+(-p0.y+3*p1.y-3*p2.y+p3.y)*t3)
+  };
+}
+
+function smoothTrack(pts, subdiv){
+  const out = [];
+  const n = pts.length;
+  for(let i=0;i<n;i++){
+    const p0 = pts[(i-1+n)%n], p1 = pts[i], p2 = pts[(i+1)%n], p3 = pts[(i+2)%n];
+    for(let s=0;s<subdiv;s++){
+      out.push(catmullRom(p0,p1,p2,p3, s/subdiv));
+    }
+  }
+  return out;
+}
+
+function generate(){
+  rand = mulberry32(seed);
+  const w = canvas.width, h = canvas.height;
+  const cx = w/2, cy = h/2;
+  const baseR = Math.min(w,h)*0.32;
+  const raw = generateTrack(rand, cx, cy, baseR, 10 + Math.floor(rand()*4));
+  trackPoints = smoothTrack(raw, 12);
+
+  // scenery scattered along track edges
+  scenery = [];
+  for(let i=0;i<trackPoints.length;i+=3){
+    if(rand() > 0.55){
+      const p = trackPoints[i];
+      const next = trackPoints[(i+1)%trackPoints.length];
+      const dx = next.x-p.x, dy = next.y-p.y;
+      const len = Math.hypot(dx,dy)||1;
+      const nx = -dy/len, ny = dx/len;
+      const side = rand() > 0.5 ? 1 : -1;
+      const dist = 70 + rand()*60;
+      scenery.push({
+        x: p.x + nx*dist*side,
+        y: p.y + ny*dist*side,
+        type: rand() > 0.3 ? 'tree' : 'barrier',
+        size: 10 + rand()*10
+      });
+    }
+  }
+
+  // elevation layer: soft hill patches scattered across the terrain
+  hillPatches = [];
+  for(let i=0;i<10+Math.floor(rand()*8);i++){
+    hillPatches.push({
+      x: rand()*w, y: rand()*h, r: 60+rand()*140,
+      shade: 0.05+rand()*0.08
+    });
+  }
+
+  // drifting cloud-shadow layer, animated over the track
+  cloudShadows = [];
+  for(let i=0;i<6;i++){
+    cloudShadows.push({
+      x: rand()*w, y: rand()*h, r: 80+rand()*120,
+      speed: 6+rand()*14, angle: rand()*Math.PI*2
+    });
+  }
+}
+
+function drawTree(x,y,size){
+  ctx.fillStyle = '#3a2a1a';
+  ctx.fillRect(x-2, y, 4, size*0.6);
+  ctx.fillStyle = '#2f6b2f';
+  ctx.beginPath();
+  ctx.arc(x, y-size*0.2, size*0.7, 0, Math.PI*2);
+  ctx.fill();
+}
+function drawBarrier(x,y,size){
+  ctx.fillStyle = '#d0442f';
+  ctx.fillRect(x-size*0.6, y-4, size*1.2, 8);
+  ctx.fillStyle = '#fff';
+  ctx.fillRect(x-size*0.2, y-4, size*0.4, 8);
+}
+
+function draw(){
+  const w=canvas.width, h=canvas.height;
+  ctx.fillStyle = '#2f6b2f';
+  ctx.fillRect(0,0,w,h);
+  // subtle grass texture
+  let g = mulberry32(seed+1);
+  ctx.fillStyle = 'rgba(0,0,0,0.05)';
+  for(let i=0;i<400;i++){
+    ctx.fillRect(g()*w, g()*h, 3,3);
+  }
+
+  // elevation shading (soft hill patches)
+  for(const hp of hillPatches){
+    const grad = ctx.createRadialGradient(hp.x,hp.y,0,hp.x,hp.y,hp.r);
+    grad.addColorStop(0, `rgba(20,60,20,${hp.shade})`);
+    grad.addColorStop(1, 'rgba(20,60,20,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(hp.x,hp.y,hp.r,0,Math.PI*2); ctx.fill();
+  }
+
+  // track surface (thick line)
+  ctx.lineJoin='round'; ctx.lineCap='round';
+  ctx.strokeStyle = '#333';
+  ctx.lineWidth = 46;
+  ctx.beginPath();
+  trackPoints.forEach((p,i)=> i===0? ctx.moveTo(p.x,p.y): ctx.lineTo(p.x,p.y));
+  ctx.closePath();
+  ctx.stroke();
+
+  // track edge lines
+  ctx.strokeStyle = '#eee';
+  ctx.lineWidth = 3;
+  ctx.setLineDash([14,10]);
+  ctx.beginPath();
+  trackPoints.forEach((p,i)=> i===0? ctx.moveTo(p.x,p.y): ctx.lineTo(p.x,p.y));
+  ctx.closePath();
+  ctx.stroke();
+  ctx.setLineDash([]);
+
+  // scenery
+  for(const s of scenery){
+    if(s.type==='tree') drawTree(s.x,s.y,s.size);
+    else drawBarrier(s.x,s.y,s.size);
+  }
+
+  // start/finish line + car
+  const p0 = trackPoints[0], p1 = trackPoints[1];
+  ctx.save();
+  ctx.translate(p0.x,p0.y);
+  const ang = Math.atan2(p1.y-p0.y, p1.x-p0.x);
+  ctx.rotate(ang);
+  ctx.fillStyle = '#fff';
+  for(let i=-2;i<=2;i++){
+    ctx.fillStyle = i%2===0 ? '#111' : '#fff';
+    ctx.fillRect(-3, i*8, 6, 8);
+  }
+  ctx.restore();
+
+  ctx.save();
+  ctx.translate(p0.x, p0.y-20);
+  ctx.rotate(ang);
+  ctx.fillStyle = '#e0453f';
+  ctx.fillRect(-10,-16,20,32);
+  ctx.fillStyle = '#222';
+  ctx.fillRect(-10,-10,6,20);
+  ctx.fillRect(4,-10,6,20);
+  ctx.restore();
+
+  // drifting cloud shadows (animated, drawn over everything)
+  const t = Date.now()/1000;
+  for(const cs of cloudShadows){
+    const x = (cs.x + Math.cos(cs.angle)*t*cs.speed) % (w+300) - 150;
+    const y = (cs.y + Math.sin(cs.angle)*t*cs.speed) % (h+300) - 150;
+    const grad = ctx.createRadialGradient(x,y,0,x,y,cs.r);
+    grad.addColorStop(0, 'rgba(0,0,0,0.12)');
+    grad.addColorStop(1, 'rgba(0,0,0,0)');
+    ctx.fillStyle = grad;
+    ctx.beginPath(); ctx.arc(x,y,cs.r,0,Math.PI*2); ctx.fill();
+  }
+}
+
+function regenerate(){
+  seed = Math.floor(Math.random()*1e9);
+  generate();
+  draw();
+}
+
+generate();
+function loop(){ draw(); requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

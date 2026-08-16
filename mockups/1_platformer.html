@@ -1,0 +1,206 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Platformer Mockup</title>
+<style>
+  html,body{margin:0;padding:0;background:#0b0e14;color:#eee;font-family:sans-serif;overflow:hidden}
+  #ui{position:fixed;top:10px;left:10px;z-index:10}
+  button{background:#2b3550;color:#fff;border:1px solid #4a5a8a;padding:8px 14px;border-radius:6px;cursor:pointer;font-size:14px}
+  button:hover{background:#3a4770}
+  canvas{display:block}
+</style>
+</head>
+<body>
+<div id="ui"><button onclick="regenerate()">Regenerate</button></div>
+<canvas id="c"></canvas>
+<script>
+const canvas = document.getElementById('c');
+const ctx = canvas.getContext('2d');
+function resize(){canvas.width=window.innerWidth;canvas.height=window.innerHeight;}
+resize(); window.addEventListener('resize', ()=>{resize(); draw();});
+
+let seed = 12345;
+function mulberry32(a){
+  return function(){
+    a |= 0; a = a + 0x6D2B79F5 | 0;
+    let t = Math.imul(a ^ a >>> 15, 1 | a);
+    t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t;
+    return ((t ^ t >>> 14) >>> 0) / 4294967296;
+  }
+}
+let rand = mulberry32(seed);
+
+function valueNoise1D(n, scale, octaves, rng){
+  const base = [];
+  const pts = Math.ceil(n/scale)+2;
+  for(let o=0;o<octaves;o++) base.push(null);
+  let result = new Array(n).fill(0);
+  let amp = 1, freq = 1/scale, maxAmp = 0;
+  for(let o=0;o<octaves;o++){
+    const count = Math.ceil(n*freq)+2;
+    const rvals = [];
+    for(let i=0;i<count;i++) rvals.push(rng());
+    for(let x=0;x<n;x++){
+      const fx = x*freq;
+      const i0 = Math.floor(fx), i1=i0+1;
+      const t = fx - i0;
+      const s = t*t*(3-2*t);
+      const v = rvals[i0]*(1-s) + rvals[i1]*s;
+      result[x] += v*amp;
+    }
+    maxAmp += amp;
+    amp *= 0.5; freq *= 2;
+  }
+  return result.map(v=>v/maxAmp);
+}
+
+let hills, mountains, platforms, groundColor, clouds, foreground;
+
+function generate(){
+  rand = mulberry32(seed);
+  const w = canvas.width, h = canvas.height;
+  mountains = valueNoise1D(w, 220, 3, rand);
+  hills = valueNoise1D(w, 90, 3, rand);
+  groundColor = `hsl(${100+Math.floor(rand()*40)}, 40%, ${25+Math.floor(rand()*10)}%)`;
+
+  // cloud layer: drifting puffs at varying depth/speed
+  clouds = [];
+  const cloudCount = 5 + Math.floor(rand()*5);
+  for(let i=0;i<cloudCount;i++){
+    clouds.push({
+      x: rand()*w, y: h*0.08 + rand()*h*0.3,
+      scale: 0.6+rand()*1.2, speed: 6+rand()*14,
+      puffs: Array.from({length: 3+Math.floor(rand()*3)}, ()=>({dx:(rand()-0.5)*60, dy:(rand()-0.5)*14, r:14+rand()*18}))
+    });
+  }
+
+  // foreground silhouette layer: bushes/rocks closer to camera, parallax fastest
+  foreground = [];
+  let fx = -40;
+  while(fx < w+40){
+    foreground.push({x: fx, r: 20+rand()*30, type: rand()>0.5?'bush':'rock'});
+    fx += 60 + rand()*120;
+  }
+
+  platforms = [];
+  let x = 80, y = canvas.height*0.65;
+  while(x < w - 80){
+    const px = x + rand()*40;
+    const py = y + (rand()-0.5)*120;
+    const pw = 90 + rand()*70;
+    platforms.push({x:px, y:Math.max(150,Math.min(canvas.height-140,py)), w:pw});
+    y = platforms[platforms.length-1].y;
+    x = px + pw + 60 + rand()*80;
+  }
+}
+
+function draw(){
+  const w = canvas.width, h = canvas.height;
+  // sky gradient
+  const sky = ctx.createLinearGradient(0,0,0,h);
+  sky.addColorStop(0,'#1b2a4a');
+  sky.addColorStop(0.6,'#4a6a9a');
+  sky.addColorStop(1,'#a9c6e8');
+  ctx.fillStyle = sky;
+  ctx.fillRect(0,0,w,h);
+
+  // sun
+  ctx.beginPath();
+  ctx.fillStyle = 'rgba(255,240,200,0.9)';
+  ctx.arc(w*0.8, h*0.18, 50, 0, Math.PI*2);
+  ctx.fill();
+
+  // clouds (drifting, behind mountains)
+  const t = Date.now()/1000;
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  for(const c of clouds){
+    const cx = ((c.x + t*c.speed) % (w+200)) - 100;
+    ctx.save();
+    ctx.translate(cx, c.y);
+    ctx.scale(c.scale, c.scale);
+    for(const p of c.puffs){
+      ctx.beginPath();
+      ctx.arc(p.dx, p.dy, p.r, 0, Math.PI*2);
+      ctx.fill();
+    }
+    ctx.restore();
+  }
+
+  // far mountains (parallax layer 1)
+  ctx.fillStyle = '#5b6d99';
+  ctx.beginPath();
+  ctx.moveTo(0,h);
+  for(let x=0;x<w;x++) ctx.lineTo(x, h*0.55 - mountains[x]*160);
+  ctx.lineTo(w,h); ctx.closePath(); ctx.fill();
+
+  // hills (parallax layer 2)
+  ctx.fillStyle = '#3f5b3f';
+  ctx.beginPath();
+  ctx.moveTo(0,h);
+  for(let x=0;x<w;x++) ctx.lineTo(x, h*0.75 - hills[x]*100);
+  ctx.lineTo(w,h); ctx.closePath(); ctx.fill();
+
+  // ground strip
+  ctx.fillStyle = groundColor;
+  ctx.fillRect(0, h-60, w, 60);
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  for(let x=0;x<w;x+=32){
+    ctx.fillRect(x, h-60, 2, 60);
+  }
+
+  // platforms
+  for(const p of platforms){
+    ctx.fillStyle = '#6b4a2f';
+    ctx.fillRect(p.x, p.y, p.w, 20);
+    ctx.fillStyle = '#8a6a3f';
+    ctx.fillRect(p.x, p.y, p.w, 6);
+    // tile lines
+    ctx.strokeStyle = 'rgba(0,0,0,0.2)';
+    for(let tx=p.x; tx<p.x+p.w; tx+=24){
+      ctx.beginPath(); ctx.moveTo(tx,p.y); ctx.lineTo(tx,p.y+20); ctx.stroke();
+    }
+  }
+
+  // simple player sprite on first platform
+  if(platforms.length){
+    const p0 = platforms[0];
+    ctx.fillStyle = '#e0453f';
+    ctx.fillRect(p0.x+10, p0.y-34, 20, 34);
+    ctx.fillStyle = '#f4c99a';
+    ctx.fillRect(p0.x+12, p0.y-44, 16, 12);
+  }
+
+  // foreground silhouette layer (closest parallax, drawn last)
+  ctx.fillStyle = 'rgba(10,15,10,0.9)';
+  for(const f of foreground){
+    if(f.type === 'bush'){
+      ctx.beginPath();
+      ctx.arc(f.x, h-40, f.r*0.6, 0, Math.PI*2);
+      ctx.arc(f.x-f.r*0.4, h-30, f.r*0.4, 0, Math.PI*2);
+      ctx.arc(f.x+f.r*0.4, h-30, f.r*0.4, 0, Math.PI*2);
+      ctx.fill();
+    } else {
+      ctx.beginPath();
+      ctx.moveTo(f.x-f.r*0.5, h);
+      ctx.lineTo(f.x-f.r*0.3, h-f.r*0.7);
+      ctx.lineTo(f.x+f.r*0.3, h-f.r*0.6);
+      ctx.lineTo(f.x+f.r*0.5, h);
+      ctx.closePath();
+      ctx.fill();
+    }
+  }
+}
+
+function regenerate(){
+  seed = Math.floor(Math.random()*1e9);
+  generate();
+  draw();
+}
+
+generate();
+function loop(){ draw(); requestAnimationFrame(loop); }
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
