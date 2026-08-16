@@ -661,7 +661,19 @@ buildConfigurable({
   ],
   // Trunk Lean removed per feedback - always straight (lean:0). Still
   // carried in params since drawTrunkAndBranches() reads p.lean.
-  defaultParams:{height:1.0,widthRatio:1.2,canopyStart:0.2,tierHeightFrac:0.14,overlap:0.31,apexAngleTop:90,branches:2,lean:0,hue:120},
+  // Defaults + randomizeParams biased toward liked feedback (2026 round):
+  // canopyStart liked cluster was razor-tight (0.14-0.15) vs disliked
+  // spread (0.11-0.29) - strongest signal in the batch, bare-trunk-below-
+  // canopy should stay small. branches (stub count) liked avg 5.0 vs
+  // disliked 1.5 - more visible trunk branches read better. height liked
+  // avg 1.46 vs disliked 1.13 - taller trees preferred. apexAngleTop
+  // liked avoided both extremes (avg 90, range 68-98) while disliked hit
+  // both very low (60) and very high (109) - kept mid-range. widthRatio,
+  // tierHeightFrac, and hue showed heavy liked/disliked range overlap -
+  // essentially no signal, left untouched. Slider min/max bounds are
+  // unchanged since those were explicit prior requests; only the
+  // defaults and the random-sampling sub-ranges shifted.
+  defaultParams:{height:1.45,widthRatio:1.2,canopyStart:0.14,tierHeightFrac:0.14,overlap:0.3,apexAngleTop:90,branches:5,lean:0,hue:95},
   drawFn:drawTreeConicalAdvanced,
   previewCanvas:document.getElementById('treeConicalPreview'),
   controlsEl:document.getElementById('treeConicalControls'),
@@ -670,15 +682,15 @@ buildConfigurable({
   variationsEl:document.getElementById('treeConicalVariations'),
   thumbSize:90,
   randomizeParams:(rng)=>({
-    height: rrange(rng,0.8,1.6),
+    height: rrange(rng,1.1,1.6),
     widthRatio: rrange(rng,1.0,1.4),
-    canopyStart: rrange(rng,0.1,0.3),
+    canopyStart: rrange(rng,0.1,0.18),
     tierHeightFrac: rrange(rng,0.12,0.17),
-    overlap: rrange(rng,0.28,0.35),
-    apexAngleTop: rrange(rng,60,110),
-    branches: rint(rng,0,6),
+    overlap: rrange(rng,0.28,0.32),
+    apexAngleTop: rrange(rng,70,100),
+    branches: rint(rng,3,6),
     lean: 0,
-    hue: rint(rng,70,160),
+    hue: rint(rng,70,150),
   }),
   promptGenBtn:document.getElementById('treeConicalGenPrompt'),
   promptCopyBtn:document.getElementById('treeConicalCopyPrompt'),
