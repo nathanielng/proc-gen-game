@@ -450,71 +450,82 @@ function drawTrunkWithBigBranches(ctx, rng, w, h, p){
   const trunkH = h*0.5*p.height;
   const trunkTopY = groundY - trunkH;
   const canopyW = w*0.4*p.widthRatio;
+  const canopyR = canopyW*0.5;
+  const canopyCx = baseX + p.lean*w*0.15; // matches trunk top's x
+  const canopyCy = trunkTopY - canopyR*0.5;
 
   ctx.fillStyle='rgba(0,0,0,0.15)';
   ctx.beginPath(); ctx.ellipse(baseX, groundY, w*0.22, h*0.03, 0, 0, Math.PI*2); ctx.fill();
 
   ctx.strokeStyle='#4a301a'; ctx.lineWidth=trunkW; ctx.lineCap='round';
   ctx.beginPath(); ctx.moveTo(baseX, groundY); ctx.quadraticCurveTo(baseX+p.lean*w*0.08, (groundY+trunkTopY)/2, baseX+p.lean*w*0.15, trunkTopY); ctx.stroke();
-  const trunkTopX = baseX + p.lean*w*0.15;
+  const trunkTopX = canopyCx;
 
-  // branches: spread evenly from branchStart up to near the trunk top,
-  // each with a random left/right side, length (0.2x-0.7x canopy width),
-  // and angle from vertical (median ± variation, both configurable)
-  const branchTips = [];
-  ctx.strokeStyle='#3a2412'; ctx.lineWidth=trunkW*0.45; ctx.lineCap='round';
-  for(let i=0;i<p.branches;i++){
-    const baseT = p.branches>1 ? p.branchStart + (i/(p.branches-1))*(0.95-p.branchStart) : (p.branchStart+0.95)/2;
+  // Decorative branch sticks: spread evenly from branchStart up to near
+  // the trunk top, using the configured start height / median angle /
+  // fixed +-5deg variation. Purely visual - foliage placement below is
+  // deliberately NOT tied to these tips (see comment there).
+  const stickCount = Math.min(p.branches, 6);
+  ctx.strokeStyle='#3a2412'; ctx.lineWidth=trunkW*0.4; ctx.lineCap='round';
+  for(let i=0;i<stickCount;i++){
+    const baseT = stickCount>1 ? p.branchStart + (i/(stickCount-1))*(0.95-p.branchStart) : (p.branchStart+0.95)/2;
     const t = Math.min(0.97, Math.max(p.branchStart, baseT + (rng()-0.5)*0.04));
     const by = groundY - trunkH*t;
     const bx = baseX + (trunkTopX-baseX)*t;
     const dir = rng()>0.5 ? 1 : -1;
     const angleDeg = p.branchAngle + (rng()-0.5)*2*p.branchAngleVar;
     const angleRad = angleDeg*Math.PI/180;
-    const len = canopyW*(0.2 + rng()*0.5); // 0.2x-0.7x of canopy width
+    const len = canopyR*0.5;
     const tipX = bx + dir*Math.sin(angleRad)*len;
     const tipY = by - Math.cos(angleRad)*len;
     ctx.beginPath(); ctx.moveTo(bx,by); ctx.lineTo(tipX,tipY); ctx.stroke();
-    branchTips.push({x:tipX, y:tipY, len});
   }
 
-  return { trunkH, trunkTopY, trunkTopX, canopyW, branchTips };
+  // Foliage clump anchors: distributed around the canopy's circular
+  // envelope (upper ~190deg arc, radius 0.55x-1.0x canopyR, jittered)
+  // instead of along the narrow branch corridor. This is what actually
+  // produces a round aggregate silhouette - clumps stacked along a near-
+  // vertical branch cone (the old approach) stay narrow and tall no
+  // matter how their individual size is tuned, since their anchor
+  // *positions* were never spread across the canopy's width. Count
+  // reuses the Branches parameter so it stays a single "how full/dense"
+  // knob for the user, and clump radius scales with the new Foliage
+  // Clump Size Factor so bigger factor = more overlap = fuller/rounder.
+  const clumps = [];
+  for(let i=0;i<p.branches;i++){
+    const spread = p.branches>1 ? (i/(p.branches-1)) : 0.5;
+    const ringAngleDeg = -95 + spread*190 + (rng()-0.5)*18;
+    const ringAngleRad = ringAngleDeg*Math.PI/180;
+    const radiusFrac = 0.55 + rng()*0.45;
+    const cx = canopyCx + Math.sin(ringAngleRad)*canopyR*radiusFrac;
+    const cy = canopyCy - Math.cos(ringAngleRad)*canopyR*radiusFrac;
+    const baseR = canopyR*(0.12 + p.foliageSizeFactor*0.35);
+    const r = baseR*(0.85+rng()*0.3);
+    clumps.push({x:cx, y:cy, r});
+  }
+
+  return { trunkH, trunkTopY, trunkTopX, canopyW, canopyR, canopyCx, canopyCy, clumps };
 }
 function drawTreeRoundAdvanced(ctx, rng, w, h, p){
-  const { trunkH, trunkTopY, trunkTopX, canopyW, branchTips } = drawTrunkWithBigBranches(ctx, rng, w, h, p);
-  const canopyH = trunkH*0.9;
-  const canopyCx = trunkTopX, canopyCy = trunkTopY - canopyH*0.15;
+  const { canopyR, canopyCx, canopyCy, clumps } = drawTrunkWithBigBranches(ctx, rng, w, h, p);
   const hue = p.hue;
   function foliageFill(l){ return `hsl(${hue},45%,${l}%)`; }
 
-  // core foliage mass around the trunk top, so the tree isn't sparse
-  // when there are few/short branches
+  // core mass at canopy center so it never reads as hollow between clumps
   ctx.fillStyle = foliageFill(30);
-  ctx.beginPath(); ctx.arc(canopyCx, canopyCy, canopyW*0.32, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(canopyCx, canopyCy, canopyR*0.55, 0, Math.PI*2); ctx.fill();
 
-  // a foliage clump at each branch tip - anchored to the actual branch
-  // endpoints so the canopy silhouette follows the branch structure.
-  // Radius is sized from the remaining horizontal room to the canopy's
-  // width envelope (canopyW/2), not from raw branch length: a branch's
-  // *length* isn't the same as its *horizontal reach* once angle is
-  // factored in, and sizing off length alone let long, steep branches
-  // push their clump past the intended width envelope. Using the actual
-  // horizontal offset keeps every clump's outer edge close to canopyW/2,
-  // so the tree stays within its configured Width/Height Ratio.
-  const canopyHalfW = canopyW*0.5;
-  branchTips.forEach((tip,i)=>{
-    const horizReach = Math.abs(tip.x - canopyCx);
-    const r = Math.max(canopyW*0.08, (canopyHalfW - horizReach) * p.foliageSizeFactor);
+  clumps.forEach((c,i)=>{
     ctx.fillStyle = foliageFill(28 + (i%3)*5);
-    ctx.beginPath(); ctx.arc(tip.x, tip.y, r, 0, Math.PI*2); ctx.fill();
+    ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI*2); ctx.fill();
   });
 
   ctx.fillStyle='rgba(255,255,255,0.15)';
-  ctx.beginPath(); ctx.arc(canopyCx-canopyW*0.12, canopyCy-canopyH*0.25, canopyW*0.18, 0, Math.PI*2); ctx.fill();
+  ctx.beginPath(); ctx.arc(canopyCx-canopyR*0.25, canopyCy-canopyR*0.35, canopyR*0.28, 0, Math.PI*2); ctx.fill();
 
   ctx.fillStyle=`hsl(${hue},45%,50%)`;
   for(let i=0;i<10;i++){
-    ctx.fillRect(canopyCx+(rng()-0.5)*canopyW*0.8, canopyCy+(rng()-0.5)*canopyH*0.6, 2, 2);
+    ctx.fillRect(canopyCx+(rng()-0.5)*canopyR*1.4, canopyCy+(rng()-0.5)*canopyR*1.4, 2, 2);
   }
 }
 buildConfigurable({
@@ -526,7 +537,7 @@ buildConfigurable({
     {key:'branchStart',label:'Branch Start Height (x trunk)',type:'range',min:0.25,max:0.55,step:0.01},
     {key:'branchAngle',label:'Branch Angle (median, °)',type:'range',min:10,max:30,step:1},
     {key:'foliageSizeFactor',label:'Foliage Clump Size Factor',type:'range',min:0.3,max:0.9,step:0.05},
-    {key:'lean',label:'Trunk Lean',type:'range',min:-1,max:1,step:0.1},
+    {key:'lean',label:'Trunk Lean',type:'range',min:-0.2,max:0.2,step:0.02},
     {key:'hue',label:'Foliage Hue',type:'range',min:70,max:160,step:5},
   ],
   // branchAngleVar is fixed at +/-5deg per feedback (no longer a slider),
@@ -547,7 +558,7 @@ buildConfigurable({
     branchAngle: rrange(rng,10,30),
     branchAngleVar: 5,
     foliageSizeFactor: rrange(rng,0.3,0.9),
-    lean: rrange(rng,-1,1),
+    lean: rrange(rng,-0.2,0.2),
     hue: rint(rng,70,160),
   }),
   promptGenBtn:document.getElementById('treeRoundGenPrompt'),
@@ -568,25 +579,33 @@ function drawTreeConicalAdvanced(ctx, rng, w, h, p){
   // canopyStart = fraction of trunk height left bare below the canopy, so
   // the trunk is visibly exposed under the lowest tier (per reference image).
   // The topmost tier's apex sits exactly at the top of the trunk.
-  const canopyH = trunkH*(1-p.canopyStart);
+  const availableCanopyH = trunkH*(1-p.canopyStart);
   const canopyCx = trunkTopX;
   const topY = trunkTopY;
   const hue = p.hue;
   function foliageFill(l){ return `hsl(${hue},45%,${l}%)`; }
 
-  const layers = p.layers;
+  // Tier count is derived, not a direct setting: tierHeight is a fixed
+  // fraction of total tree height, and however many of those fit in the
+  // available canopy height is how many tiers get drawn.
+  const tierH = p.tierHeightFrac * trunkH;
   const overlap = p.overlap;
-  // tierH chosen so the stacked, overlapping tiers span exactly canopyH
-  const tierH = canopyH / (1 + (layers-1)*(1-overlap));
+  const layers = Math.max(1, Math.floor(availableCanopyH / tierH));
 
-  for(let i=0;i<layers;i++){
+  // Bottom-tier width comes directly from Width/Height Ratio, independent
+  // of any apex angle - this is "the width of the bottom tier triangle".
+  const bottomHalfW = (w*0.4*p.widthRatio) * 0.5;
+  // Top-tier width is the only angle-driven value left: apexAngleTop sets
+  // how pointy the very top of the tree is, given the fixed tier height.
+  const topHalfW = tierH * Math.tan(p.apexAngleTop*Math.PI/360);
+
+  // Draw bottom tier first so each tier above is painted over the top of
+  // the tier below it, per feedback ("triangle above covers the triangle
+  // below" - matches how real layered conifer branches read visually).
+  for(let i=layers-1;i>=0;i--){
     const apexY = topY + i*tierH*(1-overlap);
     const baseY = apexY + tierH;
-    // apex angle interpolates from the narrow top-tier angle to the wide
-    // bottom-tier angle; half-width derives from that angle and this
-    // tier's height, then widthRatio scales the whole silhouette
-    const angleDeg = layers>1 ? p.apexAngleTop + (p.apexAngleBottom-p.apexAngleTop)*(i/(layers-1)) : (p.apexAngleTop+p.apexAngleBottom)/2;
-    const halfW = tierH * Math.tan(angleDeg*Math.PI/360) * p.widthRatio;
+    const halfW = layers>1 ? topHalfW + (bottomHalfW-topHalfW)*(i/(layers-1)) : (topHalfW+bottomHalfW)/2;
     ctx.fillStyle = foliageFill(26+i*3);
     ctx.beginPath();
     ctx.moveTo(canopyCx, apexY);
@@ -596,27 +615,25 @@ function drawTreeConicalAdvanced(ctx, rng, w, h, p){
     ctx.strokeStyle='rgba(0,0,0,0.12)'; ctx.lineWidth=1; ctx.stroke();
   }
 
-  const maxHalfW = tierH * Math.tan(p.apexAngleBottom*Math.PI/360) * p.widthRatio;
   ctx.fillStyle=`hsl(${hue},45%,50%)`;
   for(let i=0;i<10;i++){
-    ctx.fillRect(canopyCx+(rng()-0.5)*maxHalfW*1.4, topY+canopyH*0.5+(rng()-0.5)*canopyH*0.8, 2, 2);
+    ctx.fillRect(canopyCx+(rng()-0.5)*bottomHalfW*1.4, topY+availableCanopyH*0.5+(rng()-0.5)*availableCanopyH*0.8, 2, 2);
   }
 }
 buildConfigurable({
   name:'Tree (Conical)',
   schema:[
-    {key:'height',label:'Height',type:'range',min:0.7,max:1.15,step:0.05},
+    {key:'height',label:'Height',type:'range',min:0.7,max:1.4,step:0.05},
     {key:'widthRatio',label:'Width/Height Ratio',type:'range',min:0.8,max:1.4,step:0.05},
     {key:'canopyStart',label:'Height Start (bare trunk, x tree height)',type:'range',min:0.25,max:0.5,step:0.01},
-    {key:'layers',label:'Triangle Tiers',type:'range',min:4,max:6,step:1},
+    {key:'tierHeightFrac',label:'Tier Height (x tree height)',type:'range',min:0.1,max:0.18,step:0.01},
     {key:'overlap',label:'Tier Vertical Overlap',type:'range',min:0.28,max:0.35,step:0.01},
     {key:'apexAngleTop',label:'Apex Angle - Top Tier (°)',type:'range',min:60,max:110,step:1},
-    {key:'apexAngleBottom',label:'Apex Angle - Bottom Tier (°)',type:'range',min:100,max:150,step:1},
     {key:'branches',label:'Branch Stubs',type:'range',min:0,max:6,step:1},
     {key:'lean',label:'Trunk Lean',type:'range',min:-0.2,max:0.2,step:0.02},
     {key:'hue',label:'Foliage Hue',type:'range',min:70,max:160,step:5},
   ],
-  defaultParams:{height:0.9,widthRatio:1.1,canopyStart:0.35,layers:5,overlap:0.31,apexAngleTop:90,apexAngleBottom:130,branches:2,lean:0,hue:120},
+  defaultParams:{height:0.9,widthRatio:1.1,canopyStart:0.35,tierHeightFrac:0.13,overlap:0.31,apexAngleTop:90,branches:2,lean:0,hue:120},
   drawFn:drawTreeConicalAdvanced,
   previewCanvas:document.getElementById('treeConicalPreview'),
   controlsEl:document.getElementById('treeConicalControls'),
@@ -624,21 +641,17 @@ buildConfigurable({
   genBtn:document.getElementById('treeConicalGenVariations'),
   variationsEl:document.getElementById('treeConicalVariations'),
   thumbSize:90,
-  randomizeParams:(rng)=>{
-    const apexAngleTop = rrange(rng,60,110);
-    const apexAngleBottom = Math.max(apexAngleTop+15, rrange(rng,100,150));
-    return {
-      height: rrange(rng,0.7,1.15),
-      widthRatio: rrange(rng,0.8,1.4),
-      canopyStart: rrange(rng,0.25,0.5),
-      layers: rint(rng,4,6),
-      overlap: rrange(rng,0.28,0.35),
-      apexAngleTop, apexAngleBottom,
-      branches: rint(rng,0,6),
-      lean: rrange(rng,-0.2,0.2),
-      hue: rint(rng,70,160),
-    };
-  },
+  randomizeParams:(rng)=>({
+    height: rrange(rng,0.7,1.4),
+    widthRatio: rrange(rng,0.8,1.4),
+    canopyStart: rrange(rng,0.25,0.5),
+    tierHeightFrac: rrange(rng,0.1,0.18),
+    overlap: rrange(rng,0.28,0.35),
+    apexAngleTop: rrange(rng,60,110),
+    branches: rint(rng,0,6),
+    lean: rrange(rng,-0.2,0.2),
+    hue: rint(rng,70,160),
+  }),
   promptGenBtn:document.getElementById('treeConicalGenPrompt'),
   promptCopyBtn:document.getElementById('treeConicalCopyPrompt'),
   promptOut:document.getElementById('treeConicalPromptOut'),
