@@ -54,7 +54,7 @@ function withAlpha(color, alpha){
 let hueShift = 0;
 function rhue(rng,a,b){ return shue(rint(rng,a,b)); }
 function shue(h){ return ((h%360)+360+hueShift)%360; }
-function setHueShift(v){ hueShift = Number(v); document.getElementById('hueVal').textContent = v+'°'; regenAll(); }
+function setHueShift(v){ hueShift = Number(v); document.getElementById('hueVal').textContent = v+'°'; rerenderAll(); }
 
 function makeCard(container, label, size, drawFn){
   const card = document.createElement('div'); card.className='card';
@@ -62,18 +62,20 @@ function makeCard(container, label, size, drawFn){
   const ctx = canvas.getContext('2d');
   let seed = Math.floor(Math.random()*1e9);
   function render(){ const rng = mulberry32(seed); ctx.clearRect(0,0,size,size); drawFn(ctx, rng, size); }
+  function reroll(){ seed = Math.floor(Math.random()*1e9); render(); }
   render();
   const name = document.createElement('div'); name.textContent=label; name.style.fontSize='12px'; name.style.marginBottom='6px';
-  const rBtn = document.createElement('button'); rBtn.textContent='↻'; rBtn.onclick=()=>{seed=Math.floor(Math.random()*1e9);render();};
+  const rBtn = document.createElement('button'); rBtn.textContent='↻'; rBtn.onclick=reroll;
   const dBtn = document.createElement('button'); dBtn.textContent='⬇';
   dBtn.onclick=()=>{ const a=document.createElement('a'); a.href=canvas.toDataURL('image/png'); a.download=label.toLowerCase().replace(/\s+/g,'_')+'.png'; a.click(); };
   card.appendChild(canvas); card.appendChild(name); card.appendChild(rBtn); card.appendChild(dBtn);
   container.appendChild(card);
-  return render;
+  return { render, reroll };
 }
 const renderers = [];
 function addAsset(id,label,size,fn){ renderers.push(makeCard(document.getElementById(id),label,size,fn)); }
-function regenAll(){ renderers.forEach(r=>r()); }
+function regenAll(){ renderers.forEach(r=>r.reroll()); }
+function rerenderAll(){ renderers.forEach(r=>r.render()); }
 
 // ---------- SHIPS ----------
 function drawPlayerShip(ctx, rng, s){
