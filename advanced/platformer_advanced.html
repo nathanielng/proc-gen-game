@@ -315,7 +315,7 @@ buildConfigurable({
     {key:'light',label:'Lightness %',type:'range',min:20,max:70,step:2},
     {key:'moss',label:'Moss Patches',type:'range',min:0,max:6,step:1},
   ],
-  defaultParams:{edges:7,irregularity:0.4,elongation:1,hue:210,hueSat:10,light:45,moss:2},
+  defaultParams:{edges:9,irregularity:0.4,elongation:1.25,hue:210,hueSat:18,light:40,moss:2},
   drawFn:drawRockAdvanced,
   previewCanvas:document.getElementById('rockPreview'),
   controlsEl:document.getElementById('rockControls'),
@@ -323,13 +323,16 @@ buildConfigurable({
   genBtn:document.getElementById('rockGenVariations'),
   variationsEl:document.getElementById('rockVariations'),
   thumbSize:80,
+  // Biased toward liked feedback (2026 iteration): fewer 4-6 edge "gem/diamond"
+  // shapes, higher minimum saturation to avoid washed-out grays, slightly
+  // lower/tighter lightness ceiling to avoid pastel-washed results.
   randomizeParams:(rng)=>({
-    edges: rint(rng,4,14),
+    edges: rint(rng,7,14),
     irregularity: rrange(rng,0,1),
     elongation: rrange(rng,0.6,1.8),
     hue: rint(rng,0,360),
-    hueSat: rint(rng,0,40),
-    light: rint(rng,20,70),
+    hueSat: rint(rng,10,32),
+    light: rint(rng,28,55),
     moss: rint(rng,0,6),
   }),
   promptGenBtn:document.getElementById('rockGenPrompt'),
