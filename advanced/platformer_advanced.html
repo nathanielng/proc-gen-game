@@ -509,14 +509,16 @@ function drawTrunkWithBigBranches(ctx, rng, w, h, p){
   const sigmaY = availableCanopyH*0.28;
   const maxDistX = canopyW*0.5;
   const maxDistY = availableCanopyH*0.5;
-  const radiusMean = canopyR*(0.14 + p.foliageSizeFactor*0.32);
-  const radiusSigma = radiusMean*0.35;
+  // Radius floor raised (0.22x-0.6x canopyR, was 0.08x-0.55x) so clumps
+  // start from larger values per feedback, rather than skewing toward tiny.
+  const radiusMean = canopyR*(0.28 + p.foliageSizeFactor*0.32);
+  const radiusSigma = radiusMean*0.3;
   for(let i=0;i<p.branches;i++){
     let dx = gaussianRand(rng)*sigmaX;
     let dy = gaussianRand(rng)*sigmaY;
     const normDist = Math.hypot(dx/maxDistX, dy/maxDistY);
     if(normDist>1){ dx/=normDist; dy/=normDist; }
-    const r = Math.min(canopyR*0.55, Math.max(canopyR*0.08, radiusMean + gaussianRand(rng)*radiusSigma));
+    const r = Math.min(canopyR*0.6, Math.max(canopyR*0.22, radiusMean + gaussianRand(rng)*radiusSigma));
     clumps.push({x:canopyCx+dx, y:canopyCy+dy, r});
   }
 
@@ -525,14 +527,16 @@ function drawTrunkWithBigBranches(ctx, rng, w, h, p){
 function drawTreeRoundAdvanced(ctx, rng, w, h, p){
   const { canopyR, canopyCx, canopyCy, clumps } = drawTrunkWithBigBranches(ctx, rng, w, h, p);
   const hue = p.hue;
-  function foliageFill(l){ return `hsl(${hue},45%,${l}%)`; }
+  // clumps get some transparency so overlapping circles build up depth
+  // instead of each one being a flat opaque disc
+  function foliageFill(l,a){ return `hsla(${hue},45%,${l}%,${a})`; }
 
   // core mass at canopy center so it never reads as hollow between clumps
-  ctx.fillStyle = foliageFill(30);
+  ctx.fillStyle = foliageFill(30, 0.85);
   ctx.beginPath(); ctx.arc(canopyCx, canopyCy, canopyR*0.55, 0, Math.PI*2); ctx.fill();
 
   clumps.forEach((c,i)=>{
-    ctx.fillStyle = foliageFill(28 + (i%3)*5);
+    ctx.fillStyle = foliageFill(28 + (i%3)*5, 0.72);
     ctx.beginPath(); ctx.arc(c.x, c.y, c.r, 0, Math.PI*2); ctx.fill();
   });
 
@@ -549,7 +553,7 @@ buildConfigurable({
   schema:[
     {key:'height',label:'Height',type:'range',min:0.7,max:1.2,step:0.05},
     {key:'widthRatio',label:'Width/Height Ratio',type:'range',min:1.1,max:1.7,step:0.05},
-    {key:'branches',label:'Branches',type:'range',min:8,max:12,step:1},
+    {key:'branches',label:'Branches',type:'range',min:14,max:22,step:1},
     {key:'branchStart',label:'Branch Start Height (x trunk)',type:'range',min:0.25,max:0.55,step:0.01},
     {key:'branchAngle',label:'Branch Angle (median, °)',type:'range',min:10,max:30,step:1},
     {key:'foliageSizeFactor',label:'Foliage Clump Size Factor',type:'range',min:0.3,max:0.9,step:0.05},
@@ -558,7 +562,7 @@ buildConfigurable({
   ],
   // branchAngleVar is fixed at +/-5deg per feedback (no longer a slider),
   // still carried in params since the render function reads p.branchAngleVar
-  defaultParams:{height:0.95,widthRatio:1.4,branches:10,branchStart:0.35,branchAngle:20,branchAngleVar:5,foliageSizeFactor:0.6,lean:0,hue:120},
+  defaultParams:{height:0.95,widthRatio:1.4,branches:18,branchStart:0.35,branchAngle:20,branchAngleVar:5,foliageSizeFactor:0.6,lean:0,hue:120},
   drawFn:drawTreeRoundAdvanced,
   previewCanvas:document.getElementById('treeRoundPreview'),
   controlsEl:document.getElementById('treeRoundControls'),
@@ -569,7 +573,7 @@ buildConfigurable({
   randomizeParams:(rng)=>({
     height: rrange(rng,0.7,1.2),
     widthRatio: rrange(rng,1.1,1.7),
-    branches: rint(rng,8,12),
+    branches: rint(rng,14,22),
     branchStart: rrange(rng,0.25,0.55),
     branchAngle: rrange(rng,10,30),
     branchAngleVar: 5,
